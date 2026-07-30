@@ -91,39 +91,39 @@ export function ScriptStudioView({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Script Settings & Dossier Input */}
-      <div className="lg:col-span-5 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-5">
+      <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-5 transition-colors">
         <div>
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 tracking-tight">
-            <Radio className="w-4 h-4 text-slate-900" />
+          <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+            <Radio className="w-4 h-4 text-slate-900 dark:text-slate-100" />
             Guionista v2.0 - Generador de Podcast
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Convierte informes de inteligencia en guiones de radio con formato profesional.
           </p>
         </div>
 
         <div className="space-y-4 text-xs">
           <div>
-            <label className="block font-semibold text-slate-500 uppercase text-[10px] tracking-wider mb-1.5">
+            <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
               Informe de Inteligencia (Markdown Input)
             </label>
             <textarea
               value={reportText}
               onChange={(e) => setReportText(e.target.value)}
               rows={6}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:outline-none font-mono text-[11px] text-slate-800"
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 focus:outline-none font-mono text-[11px] text-slate-800 dark:text-slate-100"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-500 uppercase text-[10px] tracking-wider mb-1.5">
+              <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
                 Estilo de Programa
               </label>
               <select
                 value={showFormat}
                 onChange={(e) => setShowFormat(e.target.value as any)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 bg-white font-medium text-slate-800"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 bg-white dark:bg-slate-800 font-medium text-slate-800 dark:text-slate-100"
               >
                 <option value="Debate">Debate (Conflicto)</option>
                 <option value="Análisis">Análisis (Mesa Redonda)</option>

@@ -18,6 +18,33 @@ import { Shield, Sparkles, Activity } from "lucide-react";
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("orchestrator");
 
+  // Theme state (light / dark)
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("sf_theme");
+        if (saved === "dark" || saved === "light") return saved;
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+      } catch (e) {}
+    }
+    return "light";
+  });
+
+  useEffect(() => {
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    try {
+      localStorage.setItem("sf_theme", theme);
+    } catch (e) {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
   // Shared state across views
   const [reportText, setReportText] = useState<string | undefined>(undefined);
   const [rawScript, setRawScript] = useState<string | undefined>(undefined);
@@ -174,7 +201,7 @@ export default function Home() {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col antialiased">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-200">
         {/* Header matching Clean Minimalism */}
         <Header
           activeTab={activeTab}
@@ -184,6 +211,8 @@ export default function Home() {
           onOpenProfile={() => setIsProfileOpen(true)}
           onOpenTutorial={() => setIsTutorialOpen(true)}
           userProfile={userProfile}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         {/* Main Workspace */}
@@ -225,20 +254,20 @@ export default function Home() {
         </main>
 
         {/* Footer & Status Bar matching Design HTML */}
-        <footer className="bg-white border-t border-slate-200 py-4 text-xs text-slate-500 mt-auto">
+        <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-xs text-slate-500 dark:text-slate-400 mt-auto transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-slate-800">SourceFinder Pod v2.0</span>
-              <span className="text-slate-400">|</span>
-              <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[10px] font-mono font-bold">
+              <span className="font-bold text-slate-800 dark:text-slate-200">SourceFinder Pod v2.0</span>
+              <span className="text-slate-400 dark:text-slate-600">|</span>
+              <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono font-bold">
                 <Shield className="w-3 h-3" />
                 Filtro de Reputación Activo (&gt;0.6)
               </span>
             </div>
 
-            <div className="flex items-center gap-4 text-[11px] font-mono text-slate-500">
+            <div className="flex items-center gap-4 text-[11px] font-mono text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1">
-                <Activity className="w-3 h-3 text-indigo-600" /> Latencia API: ~120ms
+                <Activity className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /> Latencia API: ~120ms
               </span>
               <span>@google/genai SDK</span>
             </div>

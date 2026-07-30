@@ -95,20 +95,20 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Search Input Panel */}
-      <div className="lg:col-span-4 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-5">
+      <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-5 transition-colors">
         <div>
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 tracking-tight">
-            <Search className="w-4 h-4 text-slate-900" />
+          <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+            <Search className="w-4 h-4 text-slate-900 dark:text-slate-100" />
             Investigación SourceFinder
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Módulo de inteligencia y filtro de reputación en tiempo real.
           </p>
         </div>
 
         <div className="space-y-4 text-xs">
           <div>
-            <label className="block font-semibold text-slate-500 uppercase text-[10px] tracking-wider mb-1.5">
+            <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
               Tema a Investigar
             </label>
             <textarea
@@ -116,18 +116,18 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
               onChange={(e) => setTopic(e.target.value)}
               rows={3}
               placeholder="Ej: Nuevo chip M4 Pro de Apple o avances en IA..."
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-500 uppercase text-[10px] tracking-wider mb-1.5">
+            <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
               Estrategia / Tipo de Contenido
             </label>
             <select
               value={contentType}
               onChange={(e) => setContentType(e.target.value)}
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
             >
               <option value="Noticia Tecnológica">Noticia Tecnológica (70% News / 30% Web Reputada)</option>
               <option value="Espectáculos">Espectáculos / Entretenimiento (60% Web / 30% News / 10% YT)</option>
@@ -222,7 +222,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
         )}
 
         {report ? (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs space-y-0">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xs space-y-0 transition-colors">
             {/* Signal Analyst Badge Banner if triggered via TENDENCIAS */}
             {signalAnalysis && (
               <div className="bg-slate-900 text-white px-6 py-3.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">

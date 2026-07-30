@@ -98,14 +98,14 @@ export function OrchestratorView({
   return (
     <div className="space-y-6">
       {/* Pipeline Config Banner */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6 transition-colors">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 tracking-tight">
-              <Layers className="w-5 h-5 text-slate-900" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+              <Layers className="w-5 h-5 text-slate-900 dark:text-slate-100" />
               Orquestador de Podcast Automatizado
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Ejecuta el pipeline completo v2.0: Búsqueda → Calificación de Fuentes → Guionista → Doblaje Audio Studio.
             </p>
           </div>

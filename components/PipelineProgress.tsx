@@ -44,12 +44,12 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
   ];
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs mb-6">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-2xs mb-6 transition-colors">
       <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
           Flujo del Pipeline de Inteligencia & Producción
         </span>
-        <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+        <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
           Estado: {hasScript ? "Guion Listo" : hasReport ? "Informe Listo" : "Esperando Tema"}
         </span>
       </div>
@@ -65,29 +65,29 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
               onClick={() => setActiveTab(step.id)}
               className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all relative ${
                 isActive
-                  ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-sm"
                   : step.isCompleted
-                  ? "bg-emerald-50/60 border-emerald-200 text-slate-800 hover:bg-emerald-50"
-                  : "bg-slate-50/80 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  ? "bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-slate-800 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
+                  : "bg-slate-50/80 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               }`}
             >
               <div
                 className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${
                   isActive
-                    ? "bg-white text-slate-900 font-bold"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold"
                     : step.isCompleted
                     ? "bg-emerald-500 text-white"
-                    : "bg-slate-200 text-slate-600"
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                 }`}
               >
                 {step.isCompleted && !isActive ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
               </div>
 
               <div className="min-w-0">
-                <p className={`text-xs font-bold truncate ${isActive ? "text-white" : "text-slate-900"}`}>
+                <p className={`text-xs font-bold truncate ${isActive ? "text-white dark:text-slate-900" : "text-slate-900 dark:text-slate-100"}`}>
                   {step.label}
                 </p>
-                <p className={`text-[10px] truncate ${isActive ? "text-slate-300" : "text-slate-500"}`}>
+                <p className={`text-[10px] truncate ${isActive ? "text-slate-300 dark:text-slate-600" : "text-slate-500 dark:text-slate-400"}`}>
                   {step.subLabel}
                 </p>
               </div>
