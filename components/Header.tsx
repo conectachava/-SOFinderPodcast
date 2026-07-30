@@ -3,8 +3,9 @@
 import React from "react";
 import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon } from "lucide-react";
 import { UserProfile } from "./UserProfileModal";
+import { useAuth } from "../app/AuthProvider";
 
-export type TabType = "orchestrator" | "sourcefinder" | "script" | "studio" | "docs";
+export type TabType = "orchestrator" | "sourcefinder" | "script" | "studio" | "storyboard" | "docs";
 
 interface HeaderProps {
   activeTab: TabType;
@@ -13,7 +14,6 @@ interface HeaderProps {
   onOpenHistory: () => void;
   onOpenProfile: () => void;
   onOpenTutorial: () => void;
-  userProfile?: UserProfile;
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
 }
@@ -25,10 +25,10 @@ export function Header({
   onOpenHistory,
   onOpenProfile,
   onOpenTutorial,
-  userProfile,
   theme = "light",
   onToggleTheme,
 }: HeaderProps) {
+  const { profile: userProfile } = useAuth();
   const PRESETS = [
     {
       label: "🔥 TENDENCIAS (Signal Analyst)",
@@ -188,6 +188,18 @@ export function Header({
           >
             <Mic className="w-3.5 h-3.5" />
             Podcast Studio Audio Deck
+          </button>
+
+          <button
+            onClick={() => setActiveTab("storyboard")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
+              activeTab === "storyboard"
+                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5 text-pink-500" />
+            Storyboard Video (Flow)
           </button>
 
           <button

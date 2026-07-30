@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SourceBadge } from "./SourceBadge";
 import { useToast } from "./Toast";
-import { SignalAnalysisResult } from "@/app/api/source-finder/route";
+import type { SignalAnalysisResult } from "@/app/api/source-finder/route";
 
 export function SourceFinderView({ onUseReportForScript }: { onUseReportForScript?: (report: string) => void }) {
   const { addToast } = useToast();

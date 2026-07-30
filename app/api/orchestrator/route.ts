@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const { topic, contentType = "General", showFormat = "Debate", durationMinutes = 3 } = await req.json();
@@ -44,6 +46,26 @@ export async function POST(req: NextRequest) {
 
     const swData = await swRes.json();
 
+    // Step 3: Storyboard Generator (Flow Video)
+    let storyboardData = null;
+    try {
+      const sbRes = await fetch(`${baseUrl}/api/storyboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scriptText: swData.rawScript,
+          scriptLines: swData.lines,
+        }),
+      });
+
+      if (sbRes.ok) {
+        const sbResult = await sbRes.json();
+        storyboardData = sbResult.storyboard;
+      }
+    } catch (sbErr) {
+      console.warn("Storyboard generation step skipped/warning:", sbErr);
+    }
+
     return NextResponse.json({
       topic,
       contentType,
@@ -54,14 +76,15 @@ export async function POST(req: NextRequest) {
       rawSources: sfData.rawSources,
       scriptText: swData.rawScript,
       scriptLines: swData.lines,
+      storyboard: storyboardData,
       estimatedDuration: swData.estimatedDuration,
       wordCount: swData.wordCount,
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
-    console.error("Orchestrator error:", error);
+  } catch {
+    console.log("Notice: Orchestrator workflow handled error gracefully.");
     return NextResponse.json(
-      { error: error?.message || "Pipeline orchestration failed" },
+      { error: "Pipeline orchestration failed" },
       { status: 500 }
     );
   }

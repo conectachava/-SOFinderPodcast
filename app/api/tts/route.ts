@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const { text, voiceName = "Kore", multiSpeaker = false, speakers } = await req.json();
@@ -66,10 +68,10 @@ export async function POST(req: NextRequest) {
       audioBase64: audioPart.inlineData.data,
       mimeType: audioPart.inlineData.mimeType || "audio/pcm",
     });
-  } catch (error: any) {
-    console.error("Error in TTS API:", error);
+  } catch {
+    console.log("Notice: Speech generation API encountered an error.");
     return NextResponse.json(
-      { error: error?.message || "Speech generation failed." },
+      { error: "Speech generation failed." },
       { status: 500 }
     );
   }

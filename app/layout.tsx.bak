@@ -2,8 +2,6 @@ import React from 'react';
 import type {Metadata} from 'next';
 import './globals.css'; // Global styles
 
-import { AuthProvider } from './AuthProvider';
-
 export const metadata: Metadata = {
   title: 'My Google AI Studio App',
   description: 'My Google AI Studio App',
@@ -12,11 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
-      </body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

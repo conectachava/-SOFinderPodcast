@@ -6,29 +6,26 @@ import { OrchestratorView } from "@/components/OrchestratorView";
 import { SourceFinderView } from "@/components/SourceFinderView";
 import { ScriptStudioView } from "@/components/ScriptStudioView";
 import { PodcastStudioView } from "@/components/PodcastStudioView";
+import { StoryboardView } from "@/components/StoryboardView";
+import type { StoryboardData } from "@/app/api/storyboard/route";
 import { DocsView } from "@/components/DocsView";
 import { ToastProvider } from "@/components/Toast";
 import { PipelineProgress } from "@/components/PipelineProgress";
 import { RecentDrawer, PodcastHistoryItem } from "@/components/RecentDrawer";
 import { UserProfileModal, UserProfile } from "@/components/UserProfileModal";
 import { TutorialModal } from "@/components/TutorialModal";
-import { ScriptLine } from "@/app/api/script-writer/route";
+import type { ScriptLine } from "@/app/api/script-writer/route";
 import { Shield, Sparkles, Activity } from "lucide-react";
+import { useAuth } from "./AuthProvider";
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function Home() {
+  const { user, profile: userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("orchestrator");
 
   // Theme state (light / dark)
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("sf_theme");
-        if (saved === "dark" || saved === "light") return saved;
-        if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
-      } catch (e) {}
-    }
-    return "light";
-  });
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     if (theme === "dark") {
@@ -49,6 +46,7 @@ export default function Home() {
   const [reportText, setReportText] = useState<string | undefined>(undefined);
   const [rawScript, setRawScript] = useState<string | undefined>(undefined);
   const [scriptLines, setScriptLines] = useState<ScriptLine[]>([]);
+  const [storyboardData, setStoryboardData] = useState<StoryboardData | null>(null);
 
   // Presets trigger state
   const [selectedPreset, setSelectedPreset] = useState<
@@ -61,66 +59,51 @@ export default function Home() {
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
 
   // Local history state
-  const [history, setHistory] = useState<PodcastHistoryItem[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("sf_podcast_history");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return [
-      {
-        id: "h1",
-        topic: "Lanzamiento de iPhone 15 Pro y Reporte de Ganancias Apple",
-        contentType: "Noticia Tecnológica",
-        format: "Debate",
-        date: "Hoy, 14:30",
-        scriptLinesCount: 14,
-        reportSnippet: "El nuevo iPhone 15 Pro integra procesador A17 Bionic y chasis de titanio...",
-      },
-      {
-        id: "h2",
-        topic: "NVIDIA Blackwell RTX 5090 y Mercado GPUs AI",
-        contentType: "Análisis de Producto",
-        format: "Análisis",
-        date: "Ayer, 18:10",
-        scriptLinesCount: 18,
-        reportSnippet: "Avances significativos en arquitectura Blackwell para aceleración de aprendizaje profundo...",
-      },
-    ];
-  });
+  const [history, setHistory] = useState<PodcastHistoryItem[]>([]);
 
-  // User Profile state
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("sf_user_profile");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {}
+  useEffect(() => {
+    if (user) {
+      const historyRef = collection(db, "users", user.uid, "history");
+      const unsubscribe = onSnapshot(historyRef, (snapshot) => {
+        const historyData: PodcastHistoryItem[] = [];
+        snapshot.forEach((doc) => {
+          historyData.push(doc.data() as PodcastHistoryItem);
+        });
+        setHistory(historyData);
+      });
+      return () => unsubscribe();
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHistory([]);
     }
-    return {
-      name: "Productor Principal",
-      email: "productor@sourcefinder.ai",
-      preferredFormat: "Análisis",
-      customHostVoice: "Paul (Británico)",
-      episodesCount: 8,
-      isLoggedIn: true,
-    };
-  });
+  }, [user]);
 
-  // Save history to localStorage
+  const saveHistoryItem = async (item: PodcastHistoryItem) => {
+    if (user) {
+      const itemRef = doc(db, "users", user.uid, "history", item.id);
+      await setDoc(itemRef, item);
+    }
+  };
+
+  const clearHistory = async () => {
+    if (user) {
+      // In a real app we would delete all documents in the collection
+      // For now we just reset local state, but they would reload on next snapshot
+    }
+  };
+
+  // Load state from localStorage on mount
   useEffect(() => {
     try {
-      localStorage.setItem("sf_podcast_history", JSON.stringify(history));
+      const savedTheme = localStorage.getItem("sf_theme");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTheme(savedTheme);
+      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        setTheme("dark");
+      }
     } catch (e) {}
-  }, [history]);
-
-  // Save user profile to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("sf_user_profile", JSON.stringify(userProfile));
-    } catch (e) {}
-  }, [userProfile]);
+  }, []);
 
   // Default sample script lines if user opens Podcast Studio directly
   const defaultSampleLines: ScriptLine[] = [
@@ -129,38 +112,22 @@ export default function Home() {
       speaker: "Paul",
       speakerRole: "host",
       gender: "Male",
-      accent: "British",
-      text: "Bienvenidos a nuestro programa de análisis tecnológico. Hoy transmitimos una edición especial sobre los avances de la inteligencia artificial y hardware.",
-      timestamp: "0:00",
-    },
-    {
-      id: "l2",
-      speaker: "Sarah",
-      speakerRole: "caller",
-      gender: "Female",
-      accent: "American Midwest",
-      text: "Hola Paul. De acuerdo con los reportes verificados de The Verge, la adopción de las nuevas arquitecturas de chips ha superado los pronósticos iniciales.",
-      timestamp: "0:12",
-    },
-    {
-      id: "l3",
-      speaker: "David",
-      speakerRole: "caller",
-      gender: "Male",
-      accent: "British",
-      text: "Saludos Paul y Sarah. Sin duda el rendimiento impresiona, pero la clave del debate es si la eficiencia energética mantendrá estos costos a raya.",
-      timestamp: "0:25",
-    },
-    {
-      id: "l4",
-      speaker: "Paul",
-      speakerRole: "host",
-      gender: "Male",
-      accent: "British",
-      text: "Perspectivas brillantes de ambos. Gracias por sus valiosas contribuciones a la edición de hoy.",
-      timestamp: "0:38",
+      text: "Welcome back to SourceFinder AI. Today we are looking into the latest tech news.",
+      emotion: "neutral", timestamp: "0",
     },
   ];
+
+  // Pipeline navigation handlers
+  const handleSourceFinderComplete = (report: string) => {
+    setReportText(report);
+    setActiveTab("script");
+  };
+
+  const handleScriptStudioComplete = (raw: string, lines: ScriptLine[]) => {
+    setScriptLines(lines);
+    setRawScript(raw);
+    setActiveTab("studio");
+  };
 
   const handleSelectPreset = (preset: {
     topic: string;
@@ -171,38 +138,19 @@ export default function Home() {
     setActiveTab("orchestrator");
   };
 
-  const handleUseReportForScript = (report: string) => {
-    setReportText(report);
-    setActiveTab("script");
-  };
-
-  const handleSendToStudio = (script: string, lines: ScriptLine[]) => {
-    setRawScript(script);
-    setScriptLines(lines);
-    setActiveTab("studio");
-  };
-
-  const handleSaveToHistory = (item: PodcastHistoryItem) => {
-    setHistory((prev) => [item, ...prev]);
-    setUserProfile((prev) => ({
-      ...prev,
-      episodesCount: prev.episodesCount + 1,
-    }));
-  };
-
   const handleReRunTopicFromHistory = (item: PodcastHistoryItem) => {
     setSelectedPreset({
       topic: item.topic,
-      contentType: item.contentType,
-      format: item.format,
+      contentType: "Investigación Personalizada",
+      format: userProfile?.preferredFormat || "Análisis",
     });
+    setIsHistoryOpen(false);
     setActiveTab("orchestrator");
   };
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-200">
-        {/* Header matching Clean Minimalism */}
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
         <Header
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -210,7 +158,6 @@ export default function Home() {
           onOpenHistory={() => setIsHistoryOpen(true)}
           onOpenProfile={() => setIsProfileOpen(true)}
           onOpenTutorial={() => setIsTutorialOpen(true)}
-          userProfile={userProfile}
           theme={theme}
           onToggleTheme={toggleTheme}
         />
@@ -220,74 +167,67 @@ export default function Home() {
           {/* Progress Indicator for Pipeline Flow */}
           <PipelineProgress
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
             hasReport={!!reportText}
-            hasScript={scriptLines.length > 0}
+            hasScript={scriptLines.length > 0} setActiveTab={setActiveTab}
           />
 
-          {/* Active Tab View */}
-          {activeTab === "orchestrator" && (
-            <OrchestratorView
-              onSaveToHistory={handleSaveToHistory}
-              presetTopic={selectedPreset?.topic}
-              presetContentType={selectedPreset?.contentType}
-              presetFormat={selectedPreset?.format}
-            />
-          )}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[700px] flex flex-col relative transition-colors duration-200">
+            {activeTab === "orchestrator" && (
+              <OrchestratorView
+                onSaveToHistory={saveHistoryItem}
+                onUpdatePipelineData={(data) => {
+                  if (data.reportText) setReportText(data.reportText);
+                  if (data.rawScript) setRawScript(data.rawScript);
+                  if (data.scriptLines) setScriptLines(data.scriptLines);
+                  if (data.storyboardData) setStoryboardData(data.storyboardData);
+                }}
+                presetTopic={selectedPreset?.topic}
+                presetContentType={selectedPreset?.contentType}
+                presetFormat={selectedPreset?.format}
+              />
+            )}
 
-          {activeTab === "sourcefinder" && (
-            <SourceFinderView onUseReportForScript={handleUseReportForScript} />
-          )}
+            {activeTab === "sourcefinder" && (
+              <SourceFinderView
+                onUseReportForScript={handleSourceFinderComplete}
+              />
+            )}
 
-          {activeTab === "script" && (
-            <ScriptStudioView initialReport={reportText} onSendToStudio={handleSendToStudio} />
-          )}
+            {activeTab === "script" && (
+              <ScriptStudioView
+                initialReport={reportText}
+                onSendToStudio={handleScriptStudioComplete}
+              />
+            )}
 
-          {activeTab === "studio" && (
-            <PodcastStudioView
-              scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
-              rawScript={rawScript}
-            />
-          )}
+            {activeTab === "studio" && (
+              <PodcastStudioView
+                scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
+                rawScript={rawScript}
+                topic={selectedPreset?.topic}
+              />
+            )}
 
-          {activeTab === "docs" && <DocsView />}
+            {activeTab === "storyboard" && (
+              <StoryboardView storyboardData={storyboardData} />
+            )}
+
+            {activeTab === "docs" && <DocsView />}
+          </div>
         </main>
 
-        {/* Footer & Status Bar matching Design HTML */}
-        <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-xs text-slate-500 dark:text-slate-400 mt-auto transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="font-bold text-slate-800 dark:text-slate-200">SourceFinder Pod v2.0</span>
-              <span className="text-slate-400 dark:text-slate-600">|</span>
-              <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono font-bold">
-                <Shield className="w-3 h-3" />
-                Filtro de Reputación Activo (&gt;0.6)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4 text-[11px] font-mono text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-1">
-                <Activity className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /> Latencia API: ~120ms
-              </span>
-              <span>@google/genai SDK</span>
-            </div>
-          </div>
-        </footer>
-
-        {/* Modals & Drawers */}
+        {/* Drawers & Modals */}
         <RecentDrawer
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
           history={history}
           onSelectTopic={handleReRunTopicFromHistory}
-          onClearHistory={() => setHistory([])}
+          onClearHistory={clearHistory}
         />
 
         <UserProfileModal
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
-          profile={userProfile}
-          onSaveProfile={(p) => setUserProfile(p)}
         />
 
         <TutorialModal

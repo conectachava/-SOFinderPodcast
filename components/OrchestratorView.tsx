@@ -1,14 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { Layers, Play, CheckCircle2, Clock, Sparkles, RefreshCw, AlertCircle } from "lucide-react";
-import { ScriptLine } from "@/app/api/script-writer/route";
+import { Layers, Play, CheckCircle2, Clock, Sparkles, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
+import type { ScriptLine } from "@/app/api/script-writer/route";
 import { PodcastStudioView } from "./PodcastStudioView";
 import { useToast } from "./Toast";
 import { PodcastHistoryItem } from "./RecentDrawer";
+import { useAuth } from "../app/AuthProvider";
 
 interface OrchestratorViewProps {
   onSaveToHistory?: (item: PodcastHistoryItem) => void;
+  onUpdatePipelineData?: (data: {
+    reportText?: string;
+    rawScript?: string;
+    scriptLines?: ScriptLine[];
+    storyboardData?: any;
+  }) => void;
   presetTopic?: string;
   presetContentType?: string;
   presetFormat?: "Debate" | "Análisis" | "Opinión";
@@ -16,11 +23,13 @@ interface OrchestratorViewProps {
 
 export function OrchestratorView({
   onSaveToHistory,
+  onUpdatePipelineData,
   presetTopic,
   presetContentType,
   presetFormat,
 }: OrchestratorViewProps) {
   const { addToast } = useToast();
+  const { user, profile, isAdmin } = useAuth();
 
   const [topic, setTopic] = useState(presetTopic || "Procesador Quantum Gemini y Computación Cuántica 2026");
   const [contentType, setContentType] = useState(presetContentType || "Noticia Tecnológica");
@@ -28,11 +37,25 @@ export function OrchestratorView({
   const [durationMinutes, setDurationMinutes] = useState(3);
 
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState<number>(0); // 0: Idle, 1: SourceFinder, 2: ScriptWriter, 3: Audio Synthesis, 4: Complete
+  const [currentStep, setCurrentStep] = useState<number>(0);
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const isApproved = isAdmin || profile?.status === "approved";
+  const authMessage = !user 
+    ? "Inicia sesión para generar podcasts." 
+    : profile?.status === "pending" 
+      ? "Tu solicitud está pendiente de aprobación." 
+      : profile?.status === "rejected"
+        ? "Tu acceso ha sido denegado."
+        : null;
+
   const handleRunPipeline = async () => {
+    if (!isApproved) {
+      addToast("Acceso Denegado", authMessage || "No tienes permisos.", "error");
+      return;
+    }
+
     if (!topic.trim()) {
       addToast("Error de Validación", "Por favor ingresa un tema válido para investigar.", "error");
       return;
@@ -67,7 +90,16 @@ export function OrchestratorView({
       setResult(data);
       setCurrentStep(4);
 
-      addToast("Pipeline Completado", `Episodio generado con ${data.scriptLines?.length || 0} intervenciones.`, "success");
+      if (onUpdatePipelineData) {
+        onUpdatePipelineData({
+          reportText: data.intelligenceReport,
+          rawScript: data.scriptText,
+          scriptLines: data.scriptLines,
+          storyboardData: data.storyboard,
+        });
+      }
+
+      addToast("Pipeline Completado", `Episodio generado con ${data.scriptLines?.length || 0} intervenciones y Storyboard de Video.`, "success");
 
       if (onSaveToHistory) {
         onSaveToHistory({
@@ -175,10 +207,18 @@ export function OrchestratorView({
         </div>
 
         {/* Action Button */}
+        {!isApproved && (
+          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs flex items-center justify-center gap-2">
+            <ShieldAlert className="w-4 h-4" />
+            <span>{authMessage} Abre tu perfil para más detalles.</span>
+          </div>
+        )}
         <button
           onClick={handleRunPipeline}
-          disabled={loading || !topic.trim()}
-          className="w-full py-3 px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-sm transition-all"
+          disabled={loading || !topic.trim() || !isApproved}
+          className={`w-full py-3 px-6 text-white font-bold rounded-lg text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-sm transition-all ${
+            loading || !isApproved ? "bg-slate-400 cursor-not-allowed" : "bg-slate-900 hover:bg-slate-800"
+          }`}
         >
           {loading ? (
             <>

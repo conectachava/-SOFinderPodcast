@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() {
+      // Bootstrap vsnrylabs@gmail.com as the default admin
+      return isSignedIn() && (request.auth.token.email == 'vsnrylabs@gmail.com' || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['name', 'email', 'status'])
+        && data.keys().size() <= 7
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 200
+        && data.status in ['pending', 'approved', 'rejected']
+        && ( !('preferredFormat' in data) || (data.preferredFormat in ['Debate', 'Análisis', 'Opinión']) )
+        && ( !('customHostVoice' in data) || (data.customHostVoice is string && data.customHostVoice.size() <= 100) )
+        && ( !('episodesCount' in data) || (data.episodesCount is number) )
+        && ( !('updatedAt' in data) || (data.updatedAt == request.time) );
+    }
+
+    function isValidPodcastHistory(data) {
+      return data.keys().hasAll(['id', 'title', 'status', 'date'])
+        && data.keys().size() <= 7
+        && data.id is string && data.id.size() <= 100
+        && data.title is string && data.title.size() <= 200
+        && data.status in ['Ready', 'Failed', 'Processing']
+        && data.date is string && data.date.size() <= 50
+        && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
+        && ( !('duration' in data) || (data.duration is string && data.duration.size() <= 20) )
+        && ( !('sourceUrls' in data) || (data.sourceUrls is list && data.sourceUrls.size() <= 100) );
+    }
+
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      allow create: if isOwner(userId) && isValidId(userId) 
+                    && isValidUserProfile(incoming()) 
+                    && incoming().status == 'pending';
+                    
+      allow update: if isValidId(userId) && isValidUserProfile(incoming()) && (
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'updatedAt']) && incoming().status == existing().status) ||
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+      );
+      allow delete: if isAdmin() || isOwner(userId);
+
+      match /history/{historyId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming());
+        allow update: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+  }
+}

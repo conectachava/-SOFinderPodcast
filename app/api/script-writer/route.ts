@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 
+export const dynamic = "force-dynamic";
+
 export interface ScriptLine {
   id: string;
   speaker: string;
@@ -80,19 +82,25 @@ Genera SOLO el guion estructurado en líneas bien identificables con el formato 
     let rawScript = "";
 
     if (apiKey) {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-      });
+      try {
+        const ai = new GoogleGenAI({
+          apiKey,
+          httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+        });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: `${systemPrompt}\n\n--- INICIO DEL INFORME DE INTELIGENCIA ---\n${intelligenceReport}\n--- FIN DEL INFORME DE INTELIGENCIA ---`,
-      });
+        const response = await ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents: `${systemPrompt}\n\n--- INICIO DEL INFORME DE INTELIGENCIA ---\n${intelligenceReport}\n--- FIN DEL INFORME DE INTELIGENCIA ---`,
+        });
 
-      rawScript = response.text || "";
-    } else {
-      // Fallback script if no API key
+        rawScript = response.text || "";
+      } catch {
+        console.log("Notice: ScriptWriter used offline script template fallback.");
+      }
+    }
+
+    if (!rawScript) {
+      // Fallback script if no API key or API call failed
       rawScript = `${customHostName}: [calmamente] Bienvenidos a nuestro podcast de análisis. Hoy exploramos el informe de inteligencia más reciente.
 
 ${customHostName}: Para hablar sobre el tema, nos acompaña ${customCallers[0]?.name || "Sarah"}. ${customCallers[0]?.name || "Sarah"}, ¿cuál es tu primera observación?

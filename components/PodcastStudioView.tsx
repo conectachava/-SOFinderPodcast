@@ -18,7 +18,7 @@ import {
   User,
   Activity,
 } from "lucide-react";
-import { ScriptLine } from "@/app/api/script-writer/route";
+import type { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
 

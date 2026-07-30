@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user preferences and status",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 200 },
+        "preferredFormat": { "type": "string", "enum": ["Debate", "Análisis", "Opinión"] },
+        "customHostVoice": { "type": "string", "maxLength": 100 },
+        "episodesCount": { "type": "number" },
+        "updatedAt": { "type": "string", "description": "Server timestamp" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "isAdmin": { "type": "boolean" }
+      },
+      "required": ["name", "email", "status"]
+    },
+    "PodcastHistory": {
+      "title": "Podcast History",
+      "description": "Stores generation history for the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 200 },
+        "topic": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Ready", "Failed", "Processing"] },
+        "duration": { "type": "string", "maxLength": 20 },
+        "date": { "type": "string", "maxLength": 50 },
+        "sourceUrls": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 500 },
+          "maxLength": 100
+        }
+      },
+      "required": ["id", "title", "status", "date"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "users/{userId}/history/{historyId}": {
+      "schema": "PodcastHistory",
+      "description": "History of generated podcasts"
+    }
+  }
+}
