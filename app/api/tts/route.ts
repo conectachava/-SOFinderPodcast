@@ -1,0 +1,76 @@
+import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenAI } from "@google/genai";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { text, voiceName = "Kore", multiSpeaker = false, speakers } = await req.json();
+
+    if (!text || typeof text !== "string") {
+      return NextResponse.json({ error: "Text is required for TTS" }, { status: 400 });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY not configured" },
+        { status: 500 }
+      );
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+    });
+
+    let config: any = {
+      responseModalities: ["AUDIO"],
+    };
+
+    if (multiSpeaker && Array.isArray(speakers) && speakers.length >= 2) {
+      config.speechConfig = {
+        multiSpeakerVoiceConfig: {
+          speakerVoiceConfigs: speakers.map((s: { speaker: string; voiceName: string }) => ({
+            speaker: s.speaker,
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: s.voiceName || "Kore" },
+            },
+          })),
+        },
+      };
+    } else {
+      config.speechConfig = {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: voiceName || "Zephyr" },
+        },
+      };
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-tts-preview",
+      contents: [{ parts: [{ text }] }],
+      config,
+    });
+
+    const candidate = response.candidates?.[0];
+    const audioPart = candidate?.content?.parts?.find((p: any) => p.inlineData?.data);
+
+    if (!audioPart || !audioPart.inlineData?.data) {
+      return NextResponse.json(
+        { error: "No audio data returned from Gemini TTS API" },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      audioBase64: audioPart.inlineData.data,
+      mimeType: audioPart.inlineData.mimeType || "audio/pcm",
+    });
+  } catch (error: any) {
+    console.error("Error in TTS API:", error);
+    return NextResponse.json(
+      { error: error?.message || "Speech generation failed." },
+      { status: 500 }
+    );
+  }
+}

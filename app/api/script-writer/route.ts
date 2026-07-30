@@ -1,0 +1,186 @@
+import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenAI } from "@google/genai";
+
+export interface ScriptLine {
+  id: string;
+  speaker: string;
+  speakerRole: "host" | "caller";
+  gender?: "Male" | "Female";
+  accent?: string;
+  emotion?: string;
+  text: string;
+  timestamp: string; // e.g. "0:05"
+}
+
+interface CallerConfig {
+  name: string;
+  gender?: string;
+  accent?: string;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const {
+      intelligenceReport,
+      showFormat = "Debate",
+      durationMinutes = 3,
+      customHostName = "Paul",
+      customCallers = [
+        { name: "Sarah", gender: "Female", accent: "American Midwest" },
+        { name: "David", gender: "Male", accent: "British" },
+      ],
+    } = await req.json();
+
+    const callersList: CallerConfig[] = Array.isArray(customCallers) ? customCallers : [];
+
+    if (!intelligenceReport || typeof intelligenceReport !== "string") {
+      return NextResponse.json(
+        { error: "Intelligence report text is required." },
+        { status: 400 }
+      );
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    const targetWords = durationMinutes * 125;
+
+    const systemPrompt = `
+System Prompt: Guionista v2.0 (Adaptado para SourceFinder)
+ROL Y MISIÓN:
+Eres un Productor y Guionista de Radio para un podcast de actualidad. Tu misión es tomar el Informe de Inteligencia verificado y convertirlo en un guion de radio de ~${durationMinutes} minutos (aprox. ${targetWords} palabras), listo para ser grabado.
+
+REGLAS STRICTAS DE EJECUCIÓN:
+1. ANÁLISIS DEL INFORME:
+- Basado estrictamente en la información recibida en el Informe de Inteligencia.
+- CITA OBLIGATORIA: El moderador o los callers DEBEN citar explícitamente al menos una de las fuentes verificadas mencionadas en el informe (ej. "Según un reporte de The Verge...", "Como indica TechCrunch...", "Variety reportó que...").
+
+2. ESTRUCTURA Y ESTILO SOLICITADO: **Style: ${showFormat.toUpperCase()}**
+${
+  showFormat === "Debate"
+    ? "- Usa los Puntos de Debate para generar un conflicto constructivo pero marcado entre los dos callers."
+    : showFormat === "Análisis"
+    ? "- Usa los Puntos Clave como temas centrales de una mesa redonda colaborativa e inquisitiva."
+    : "- Presenta a un caller como un experto/analista en la materia respondiendo preguntas en formato entrevista."
+}
+
+3. FORMATO Y SINTAXIS OBLIGATORIA DE CADA LÍNEA DE GUION:
+- Moderador principal: ${customHostName} (moderador británico, calmado y elegante).
+- Participantes/Callers introducidos por ${customHostName}: ${callersList.map((c: CallerConfig) => c.name).join(", ")}.
+- Formato de cada intervención:
+${customHostName}: [calmamente] Texto...
+${customCallers[0]?.name || "Caller1"}: [${customCallers[0]?.gender || "Female"}] [Accent: ${customCallers[0]?.accent || "American"}] Texto...
+${customCallers[1]?.name || "Caller2"}: [${customCallers[1]?.gender || "Male"}] [Accent: ${customCallers[1]?.accent || "British"}] Texto...
+
+- Los callers deben sonar como personas reales e inteligentes, usando muletillas naturales ("pues...", "uhm", "mira", "saben...", "de hecho...").
+- ${customHostName} SIEMPRE debe dar la bienvenida e introducir por nombre y ubicación a cada caller antes de su primera intervención.
+
+Genera SOLO el guion estructurado en líneas bien identificables con el formato "Nombre: [etiquetas] Texto".
+`;
+
+    let rawScript = "";
+
+    if (apiKey) {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+      });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: `${systemPrompt}\n\n--- INICIO DEL INFORME DE INTELIGENCIA ---\n${intelligenceReport}\n--- FIN DEL INFORME DE INTELIGENCIA ---`,
+      });
+
+      rawScript = response.text || "";
+    } else {
+      // Fallback script if no API key
+      rawScript = `${customHostName}: [calmamente] Bienvenidos a nuestro podcast de análisis. Hoy exploramos el informe de inteligencia más reciente.
+
+${customHostName}: Para hablar sobre el tema, nos acompaña ${customCallers[0]?.name || "Sarah"}. ${customCallers[0]?.name || "Sarah"}, ¿cuál es tu primera observación?
+
+${customCallers[0]?.name || "Sarah"}: [${customCallers[0]?.gender || "Female"}] [Accent: ${customCallers[0]?.accent || "American Midwest"}] Hola ${customHostName}. Pues mira, según un reporte verificado de The Verge, los datos confirman un impacto muy significativo en el sector.
+
+${customHostName}: Un punto fascinante. Pero también hay debates. Demos la bienvenida a ${customCallers[1]?.name || "David"}. ${customCallers[1]?.name || "David"}, ¿cómo lo ves tú?
+
+${customCallers[1]?.name || "David"}: [${customCallers[1]?.gender || "Male"}] [Accent: ${customCallers[1]?.accent || "British"}] Saludos ${customHostName}. Uhm, aunque las cifras son sólidas, el debate principal radica en la sostenibilidad a largo plazo.
+
+${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
+    }
+
+    // Parse rawScript into structured line objects for the Studio audio player
+    const lines: ScriptLine[] = [];
+    const rawLines = rawScript.split("\n").filter((l) => l.trim().length > 0);
+
+    let currentTimeSeconds = 0;
+
+    rawLines.forEach((lineStr, idx) => {
+      const match = lineStr.match(/^([^:]+):\s*(.*)$/);
+      if (match) {
+        const speakerRaw = match[1].trim();
+        let contentRaw = match[2].trim();
+
+        // Extract brackets like [Female] [Accent: Scottish] or [calmly]
+        let gender: "Male" | "Female" | undefined = undefined;
+        let accent: string | undefined = undefined;
+        let emotion: string | undefined = undefined;
+
+        if (contentRaw.includes("[Female]")) gender = "Female";
+        if (contentRaw.includes("[Male]")) gender = "Male";
+
+        const accentMatch = contentRaw.match(/\[Accent:\s*([^\]]+)\]/i);
+        if (accentMatch) accent = accentMatch[1];
+
+        const emotionMatch = contentRaw.match(/\[([a-záéíóúñA-ZÁÉÍÓÚÑ\s]{3,20})\]/);
+        if (emotionMatch && !emotionMatch[0].includes("Male") && !emotionMatch[0].includes("Female") && !emotionMatch[0].includes("Accent")) {
+          emotion = emotionMatch[1];
+        }
+
+        // Clean out bracket tags from text
+        const cleanText = contentRaw
+          .replace(/\[Female\]/gi, "")
+          .replace(/\[Male\]/gi, "")
+          .replace(/\[Accent:\s*[^\]]+\]/gi, "")
+          .replace(/\[[a-zA-Z\s]{2,20}\]/g, "")
+          .trim();
+
+        const isHost = speakerRaw.toLowerCase().includes(customHostName.toLowerCase()) || speakerRaw.toLowerCase().includes("paul") || speakerRaw.toLowerCase().includes("host") || speakerRaw.toLowerCase().includes("presentador");
+
+        const wordCount = cleanText.split(/\s+/).length;
+        // ~2.2 words per second speaking rate
+        const lineDuration = Math.max(3, Math.round(wordCount / 2.2));
+
+        const mins = Math.floor(currentTimeSeconds / 60);
+        const secs = currentTimeSeconds % 60;
+        const timestamp = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+
+        lines.push({
+          id: `line-${idx + 1}`,
+          speaker: speakerRaw,
+          speakerRole: isHost ? "host" : "caller",
+          gender: gender || (isHost ? "Male" : idx % 2 === 0 ? "Female" : "Male"),
+          accent: accent || (isHost ? "British" : "International"),
+          emotion,
+          text: cleanText,
+          timestamp,
+        });
+
+        currentTimeSeconds += lineDuration;
+      }
+    });
+
+    const totalWords = rawScript.split(/\s+/).length;
+    const estMins = (totalWords / 125).toFixed(1);
+
+    return NextResponse.json({
+      rawScript,
+      lines,
+      wordCount: totalWords,
+      estimatedDuration: `${estMins} mins`,
+      showFormat,
+    });
+  } catch (error: any) {
+    console.error("Error in ScriptWriter API:", error);
+    return NextResponse.json(
+      { error: error?.message || "Failed to generate radio script." },
+      { status: 500 }
+    );
+  }
+}
