@@ -228,7 +228,7 @@ export default function Home() {
         <footer className="bg-white border-t border-slate-200 py-4 text-xs text-slate-500 mt-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-slate-800">SourceFinder AI Studio v2.0</span>
+              <span className="font-bold text-slate-800">SourceFinder Pod v2.0</span>
               <span className="text-slate-400">|</span>
               <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[10px] font-mono font-bold">
                 <Shield className="w-3 h-3" />

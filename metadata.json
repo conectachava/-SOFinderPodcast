@@ -1,5 +1,5 @@
 {
-  "name": "SourceFinder AI Studio",
+  "name": "SourceFinder Pod",
   "description": "Automated Intelligence Gathering & Multi-Voice Podcast Generation Platform powered by Gemini AI.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

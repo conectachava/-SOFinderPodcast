@@ -58,7 +58,7 @@ export function Header({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-semibold tracking-tight text-slate-900">
-                  SourceFinder <span className="text-slate-400 font-normal ml-1">v2.0 Orchestrator</span>
+                  SourceFinder Pod <span className="text-slate-400 font-normal ml-1">v2.0 Orchestrator</span>
                 </h1>
                 <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded text-[10px] font-mono font-bold">
                   GEMINI_API Active
