@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
+import { SentimentBadge } from "./SentimentBadge";
 
 interface PodcastStudioViewProps {
   scriptLines: ScriptLine[];
@@ -38,6 +39,8 @@ export function PodcastStudioView({
   const [activeLineIdx, setActiveLineIdx] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  // Individual line speed pacing map (0.5x to 2.0x per line)
+  const [lineSpeeds, setLineSpeeds] = useState<Record<string, number>>({});
   const [volume, setVolume] = useState<number>(0.9);
   const [musicDucking, setMusicDucking] = useState<number>(0.15); // background ambient level
   const [geminiAudioLoading, setGeminiAudioLoading] = useState<boolean>(false);
@@ -85,8 +88,9 @@ export function PodcastStudioView({
 
     window.speechSynthesis.cancel();
 
+    const lineSpeed = lineSpeeds[currentLine.id] ?? 1.0;
     const utterance = new SpeechSynthesisUtterance(currentLine.text);
-    utterance.rate = playbackSpeed * 1.05;
+    utterance.rate = Math.max(0.1, Math.min(10, playbackSpeed * lineSpeed * 1.05));
     utterance.volume = volume;
 
     // Pick voice based on speaker gender / role
@@ -128,7 +132,7 @@ export function PodcastStudioView({
     return () => {
       window.speechSynthesis.cancel();
     };
-  }, [isPlaying, activeLineIdx, lines, playbackSpeed, volume]);
+  }, [isPlaying, activeLineIdx, lines, playbackSpeed, volume, lineSpeeds]);
 
   // Audio Waveform Canvas Animation
   useEffect(() => {
@@ -561,8 +565,8 @@ export function PodcastStudioView({
                     : "bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                 }`}
               >
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <div className="flex items-center gap-2 font-bold">
+                <div className="flex flex-wrap items-center justify-between text-xs mb-2 gap-2">
+                  <div className="flex flex-wrap items-center gap-2 font-bold">
                     <span
                       className={`w-2.5 h-2.5 rounded-full ${
                         line.speakerRole === "host" ? "bg-pink-400" : "bg-emerald-400"
@@ -570,13 +574,16 @@ export function PodcastStudioView({
                     />
                     <span className={isActive ? "text-white font-bold" : "text-slate-900 dark:text-slate-100"}>{line.speaker}</span>
 
+                    {/* SENTIMENT INDICATOR BADGE */}
+                    <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
+
                     {/* SAMPLE PLAY BUTTON NEXT TO LINE SPEAKER */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePlaySpeakerSample(line.speaker, line.gender || "Male", line.accent || "General");
                       }}
-                      className={`ml-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 transition-all border ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 transition-all border ${
                         isSamplingThisLine
                           ? "bg-amber-500 text-white border-amber-600 animate-pulse"
                           : isActive
@@ -586,7 +593,7 @@ export function PodcastStudioView({
                       title="Probar muestra de audio de 3s para este locutor"
                     >
                       <Volume2 className="w-3 h-3" />
-                      {isSamplingThisLine ? `${sampleCountdown}s` : "Play Sample (3s)"}
+                      {isSamplingThisLine ? `${sampleCountdown}s` : "Play (3s)"}
                     </button>
                   </div>
 
@@ -596,9 +603,56 @@ export function PodcastStudioView({
                   </div>
                 </div>
 
-                <p className={`text-xs sm:text-sm font-serif leading-relaxed pl-4 border-l-2 ${isActive ? "border-pink-400 text-slate-100" : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200"}`}>
+                <p className={`text-xs sm:text-sm font-serif leading-relaxed pl-4 border-l-2 mb-2.5 ${isActive ? "border-pink-400 text-slate-100" : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200"}`}>
                   {line.text}
                 </p>
+
+                {/* SPEED SLIDER (0.5x to 2.0x) PER VOICE LINE */}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={`flex flex-wrap items-center justify-between text-[11px] pt-1.5 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                    isActive
+                      ? "bg-slate-950/70 border-slate-800 text-slate-300"
+                      : "bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className="font-mono font-semibold text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Velocidad Voz:
+                    </span>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={lineSpeeds[line.id] ?? 1.0}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setLineSpeeds((prev) => ({ ...prev, [line.id]: val }));
+                      }}
+                      className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400 min-w-[32px]">
+                      {(lineSpeeds[line.id] ?? 1.0).toFixed(1)}x
+                    </span>
+                  </div>
+
+                  {(lineSpeeds[line.id] ?? 1.0) !== 1.0 && (
+                    <button
+                      onClick={() => {
+                        setLineSpeeds((prev) => {
+                          const copy = { ...prev };
+                          delete copy[line.id];
+                          return copy;
+                        });
+                      }}
+                      className="text-[10px] font-mono text-slate-400 hover:text-slate-200 underline ml-2"
+                    >
+                      Restablecer (1.0x)
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User } from "lucide-react";
 import { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
+import { SentimentBadge } from "./SentimentBadge";
 
 export function ScriptStudioView({
   initialReport,
@@ -276,13 +277,16 @@ export function ScriptStudioView({
             <div className="p-6 font-mono text-xs leading-loose max-h-[500px] overflow-y-auto space-y-4">
               {parsedLines.map((line) => (
                 <div key={line.id} className="p-3 bg-slate-950/60 rounded border border-slate-800/80">
-                  <div className="flex items-center justify-between text-[11px] mb-1">
-                    <span className="font-bold text-pink-400">{line.speaker}:</span>
+                  <div className="flex items-center justify-between text-[11px] mb-1.5 flex-wrap gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-pink-400">{line.speaker}:</span>
+                      <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
+                    </div>
                     <span className="text-[10px] text-slate-500 font-mono">
                       {line.gender} | <span className="text-emerald-400">{line.accent}</span>
                     </span>
                   </div>
-                  <p className="text-slate-200">{line.text}</p>
+                  <p className="text-slate-200 font-serif leading-relaxed">{line.text}</p>
                 </div>
               ))}
             </div>

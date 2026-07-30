@@ -8,6 +8,7 @@ export interface ScriptLine {
   gender?: "Male" | "Female";
   accent?: string;
   emotion?: string;
+  sentiment?: "neutral" | "enthusiastic" | "concerned";
   text: string;
   timestamp: string; // e.g. "0:05"
 }
@@ -117,10 +118,11 @@ ${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
         const speakerRaw = match[1].trim();
         let contentRaw = match[2].trim();
 
-        // Extract brackets like [Female] [Accent: Scottish] or [calmly]
+        // Extract brackets like [Female] [Accent: Scottish] or [calmly] or [Sentiment: enthusiastic]
         let gender: "Male" | "Female" | undefined = undefined;
         let accent: string | undefined = undefined;
         let emotion: string | undefined = undefined;
+        let sentiment: "neutral" | "enthusiastic" | "concerned" = "neutral";
 
         if (contentRaw.includes("[Female]")) gender = "Female";
         if (contentRaw.includes("[Male]")) gender = "Male";
@@ -128,13 +130,36 @@ ${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
         const accentMatch = contentRaw.match(/\[Accent:\s*([^\]]+)\]/i);
         if (accentMatch) accent = accentMatch[1];
 
+        const sentMatch = contentRaw.match(/\[Sentiment:\s*(enthusiastic|concerned|neutral)\]/i);
+        if (sentMatch) {
+          const matched = sentMatch[1].toLowerCase();
+          if (matched === "enthusiastic" || matched === "concerned" || matched === "neutral") {
+            sentiment = matched as "neutral" | "enthusiastic" | "concerned";
+          }
+        } else if (/enthusiastic|entusiasta/i.test(contentRaw)) {
+          sentiment = "enthusiastic";
+        } else if (/concerned|preocupad|alerta|riesgo/i.test(contentRaw)) {
+          sentiment = "concerned";
+        }
+
         const emotionMatch = contentRaw.match(/\[([a-záéíóúñA-ZÁÉÍÓÚÑ\s]{3,20})\]/);
-        if (emotionMatch && !emotionMatch[0].includes("Male") && !emotionMatch[0].includes("Female") && !emotionMatch[0].includes("Accent")) {
+        if (emotionMatch && !emotionMatch[0].includes("Male") && !emotionMatch[0].includes("Female") && !emotionMatch[0].includes("Accent") && !emotionMatch[0].includes("Sentiment")) {
           emotion = emotionMatch[1];
+        }
+
+        // If sentiment still neutral, classify from text content
+        if (sentiment === "neutral") {
+          const lower = contentRaw.toLowerCase();
+          if (/excelente|increíble|fascinante|éxito|entusiasta|emocionante|fantástico|revolucionario|bienvenidos|oportunidad|positivo|genial|me gusta|maravilla|prometedor/i.test(lower)) {
+            sentiment = "enthusiastic";
+          } else if (/preocupaci|riesgo|alerta|duda|problema|cuestionamiento|sostenibilidad|amenaza|caída|pérdida|crític|error|falla|grave|difícil/i.test(lower)) {
+            sentiment = "concerned";
+          }
         }
 
         // Clean out bracket tags from text
         const cleanText = contentRaw
+          .replace(/\[Sentiment:\s*[^\]]+\]/gi, "")
           .replace(/\[Female\]/gi, "")
           .replace(/\[Male\]/gi, "")
           .replace(/\[Accent:\s*[^\]]+\]/gi, "")
@@ -158,6 +183,7 @@ ${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
           gender: gender || (isHost ? "Male" : idx % 2 === 0 ? "Female" : "Male"),
           accent: accent || (isHost ? "British" : "International"),
           emotion,
+          sentiment,
           text: cleanText,
           timestamp,
         });
