@@ -15,11 +15,32 @@ import { RecentDrawer, PodcastHistoryItem } from "@/components/RecentDrawer";
 import { UserProfileModal, UserProfile } from "@/components/UserProfileModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { HelpGuideDrawer } from "@/components/HelpGuideDrawer";
+import { MiniPlayerBar } from "@/components/MiniPlayerBar";
+import { InactivityModal } from "@/components/InactivityModal";
+import { LoginPage } from "@/components/LoginPage";
+import { AuthRequiredModal } from "@/components/AuthRequiredModal";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { Shield, Sparkles, Activity } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+import { useToast } from "@/components/Toast";
+
+function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "idle" }) {
+  const { addToast } = useToast();
+  const prevStatusRef = React.useRef(syncStatus);
+
+  useEffect(() => {
+    if (prevStatusRef.current === "saving" && syncStatus === "saved") {
+      addToast("Sincronización Cloud", "Progreso guardado en Firestore con éxito.", "success");
+    }
+    prevStatusRef.current = syncStatus;
+  }, [syncStatus, addToast]);
+
+  return null;
+}
 
 export default function Home() {
   const { user, profile: userProfile } = useAuth();
@@ -57,6 +78,11 @@ export default function Home() {
   // Modals & Drawers state
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isHelpGuideOpen, setIsHelpGuideOpen] = useState<boolean>(false);
+  const [guestBypassed, setGuestBypassed] = useState<boolean>(false);
+  const [authRequiredOpen, setAuthRequiredOpen] = useState<boolean>(false);
+  const [authRequiredFeature, setAuthRequiredFeature] = useState<string>("esta función avanzada");
+  const [language, setLanguage] = useState<"es" | "en">("es");
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     try {
       const onboarded = localStorage.getItem("sf_onboarded");
@@ -261,35 +287,70 @@ export default function Home() {
     setActiveTab("orchestrator");
   };
 
+  if (!user && !guestBypassed) {
+    return (
+      <ToastProvider>
+        <LoginPage onBypassGuest={() => setGuestBypassed(true)} />
+      </ToastProvider>
+    );
+  }
+
   return (
     <ToastProvider>
-      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+      <AutosaveNotifier syncStatus={syncStatus} />
+      <div className="min-h-screen flex flex-col bg-slate-100/80 dark:bg-slate-950 transition-colors duration-200">
         <Header
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={(tab) => {
+            if ((tab === "studio" || tab === "script") && !user) {
+              setAuthRequiredFeature("el Estudio y Consola de Audio");
+              setAuthRequiredOpen(true);
+              return;
+            }
+            setActiveTab(tab);
+          }}
           onSelectPreset={handleSelectPreset}
-          onOpenHistory={() => setIsHistoryOpen(true)}
+          onOpenHistory={() => {
+            if (!user) {
+              setAuthRequiredFeature("el Historial de Podcasts y Sincronización Cloud");
+              setAuthRequiredOpen(true);
+              return;
+            }
+            setIsHistoryOpen(true);
+          }}
           onOpenProfile={() => setIsProfileOpen(true)}
           onOpenTutorial={() => setIsTutorialOpen(true)}
+          onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
           theme={theme}
           onToggleTheme={toggleTheme}
+          language={language}
+          onToggleLanguage={() => setLanguage((l) => (l === "es" ? "en" : "es"))}
           history={history}
           onSelectHistoryItem={handleReRunTopicFromHistory}
           onExportProject={handleExportProject}
           syncStatus={syncStatus}
         />
 
-        {/* Main Workspace */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Persistent Mini Player Bar */}
+        <MiniPlayerBar
+          currentTopic={selectedPreset?.topic || "Epílogo: Análisis de Fuentes & Tendencias AI"}
+          onOpenStudio={() => setActiveTab("studio")}
+        />
+
+        {/* Professional Dashboard Shell Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
           {/* Progress Indicator for Pipeline Flow */}
-          <PipelineProgress
-            activeTab={activeTab}
-            hasReport={!!reportText}
-            hasScript={scriptLines.length > 0} setActiveTab={setActiveTab}
-          />
+          <aside aria-label="Pipeline Progress">
+            <PipelineProgress
+              activeTab={activeTab}
+              hasReport={!!reportText}
+              hasScript={scriptLines.length > 0} 
+              setActiveTab={setActiveTab}
+            />
+          </aside>
 
           <ErrorBoundary>
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[700px] flex flex-col relative transition-colors duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] border border-slate-200/90 dark:border-slate-800 overflow-hidden min-h-[720px] flex flex-col relative transition-colors duration-200">
               {activeTab === "orchestrator" && (
                 <OrchestratorView
                   onSaveToHistory={saveHistoryItem}
@@ -355,6 +416,27 @@ export default function Home() {
           isOpen={isTutorialOpen}
           onClose={() => setIsTutorialOpen(false)}
           onStartPipeline={() => setActiveTab("orchestrator")}
+        />
+
+        <HelpGuideDrawer
+          isOpen={isHelpGuideOpen}
+          onClose={() => setIsHelpGuideOpen(false)}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+
+        <AuthRequiredModal
+          isOpen={authRequiredOpen}
+          onClose={() => setAuthRequiredOpen(false)}
+          featureName={authRequiredFeature}
+        />
+
+        <InactivityModal
+          onAutoSaveAndLogout={() => {
+            handleClearSession();
+            window.location.reload();
+          }}
+          onStayActive={() => {}}
         />
       </div>
     </ToastProvider>

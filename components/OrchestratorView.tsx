@@ -7,7 +7,7 @@ import { PodcastStudioView } from "./PodcastStudioView";
 import { useToast } from "./Toast";
 import { PodcastHistoryItem } from "./RecentDrawer";
 import { useAuth } from "../app/AuthProvider";
-import { LandingHero } from "./LandingHero";
+
 
 interface OrchestratorViewProps {
   onSaveToHistory?: (item: PodcastHistoryItem) => void;
@@ -185,10 +185,7 @@ export function OrchestratorView({
   };
 
   return (
-    <div className="space-y-8 p-4 sm:p-6">
-      {/* High-Converting Landing Hero highlighting user pain points & solution */}
-      <LandingHero onStartNow={handleScrollToOrchestrator} />
-
+    <div className="space-y-6 p-4 sm:p-6">
       {/* Pipeline Config Banner */}
       <div ref={orchestratorRef} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6 transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">

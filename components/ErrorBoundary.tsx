@@ -38,15 +38,30 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mb-6">
             {this.state.error?.message || "Ocurrió un error inesperado al renderizar la interfaz."}
           </p>
-          <button
-            onClick={() => {
-              this.setState({ hasError: false, error: null });
-              window.location.reload();
-            }}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-medium text-xs rounded-lg transition-colors shadow-sm"
-          >
-            🔄 Restablecer Vista (Reset View)
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-medium text-xs rounded-xl transition-colors shadow-sm"
+            >
+              🔄 Restablecer Vista
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                } catch (e) {}
+                this.setState({ hasError: false, error: null });
+                window.location.href = "/";
+              }}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-all shadow-md flex items-center gap-2"
+            >
+              ⚡ System Reset (Limpiar Caché y Firestore Draft)
+            </button>
+          </div>
         </div>
       );
     }

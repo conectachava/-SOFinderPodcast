@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+body {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
+@keyframes searchGlow {
+  0%, 100% { box-shadow: 0 0 0px rgba(99, 102, 241, 0); }
+  50% { box-shadow: 0 0 12px rgba(99, 102, 241, 0.4); }
+}
+
+.search-glow {
+  animation: searchGlow 1.5s infinite ease-in-out;
+}

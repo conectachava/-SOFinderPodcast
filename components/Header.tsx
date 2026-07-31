@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon } from "lucide-react";
+import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe } from "lucide-react";
 import { UserProfile } from "./UserProfileModal";
 import { useAuth } from "../app/AuthProvider";
 
@@ -14,8 +14,11 @@ interface HeaderProps {
   onOpenHistory: () => void;
   onOpenProfile: () => void;
   onOpenTutorial: () => void;
+  onOpenHelpGuide?: () => void;
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
+  language?: "es" | "en";
+  onToggleLanguage?: () => void;
   history?: any[];
   onSelectHistoryItem?: (item: any) => void;
   onExportProject?: () => void;
@@ -29,14 +32,17 @@ export function Header({
   onOpenHistory,
   onOpenProfile,
   onOpenTutorial,
+  onOpenHelpGuide,
   theme = "light",
   onToggleTheme,
+  language = "es",
+  onToggleLanguage,
   history = [],
   onSelectHistoryItem,
   onExportProject,
   syncStatus = "saved",
 }: HeaderProps) {
-  const { profile: userProfile } = useAuth();
+  const { user, profile: userProfile } = useAuth();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
 
@@ -94,7 +100,7 @@ export function Header({
           <div className="flex flex-wrap items-center gap-2">
             {/* Global Search Bar */}
             <div className="relative">
-              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 w-48 sm:w-60 focus-within:ring-2 focus-within:ring-slate-900">
+              <div className={`flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 w-48 sm:w-60 focus-within:ring-2 focus-within:ring-slate-900 transition-all ${searchQuery ? "search-glow border-indigo-500/50" : ""}`}>
                 <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
                 <input
                   type="text"
@@ -117,14 +123,19 @@ export function Header({
                 )}
               </div>
 
-              {/* Search Results Dropdown */}
+              {/* Search Results Dropdown with Loading Skeleton */}
               {isSearchOpen && searchQuery.trim() && (
                 <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto p-2 space-y-1">
-                  <div className="text-[10px] font-mono text-slate-400 px-2 py-1 uppercase">
-                    Resultados en Historial ({filteredHistory.length})
+                  <div className="text-[10px] font-mono text-slate-400 px-2 py-1 uppercase flex items-center justify-between">
+                    <span>Resultados en Historial</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   </div>
                   {filteredHistory.length === 0 ? (
-                    <div className="p-3 text-xs text-slate-500 text-center">No se encontraron coincidencias.</div>
+                    <div className="p-4 space-y-2 animate-pulse">
+                      <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-3/4"></div>
+                      <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-1/2"></div>
+                      <p className="text-xs text-slate-500 text-center pt-2">No se encontraron coincidencias.</p>
+                    </div>
                   ) : (
                     filteredHistory.map((item, idx) => (
                       <div
@@ -225,6 +236,38 @@ export function Header({
               <User className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">{userProfile?.name || "Perfil"}</span>
             </button>
+
+            {!user && (
+              <button
+                onClick={onOpenProfile}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5 animate-pulse"
+                title="Iniciar sesión con Google"
+              >
+                🔑 <span className="hidden sm:inline">Iniciar Sesión</span>
+              </button>
+            )}
+
+            {onToggleLanguage && (
+              <button
+                onClick={onToggleLanguage}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-md text-xs font-medium transition-colors border border-slate-200 dark:border-slate-700 flex items-center gap-1.5"
+                title="Cambiar Idioma (Language)"
+              >
+                <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="uppercase font-mono text-[11px]">{language}</span>
+              </button>
+            )}
+
+            {onOpenHelpGuide && (
+              <button
+                onClick={onOpenHelpGuide}
+                className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-xs font-semibold transition-colors flex items-center gap-1 shadow-xs"
+                title="Panel de Ayuda Contextual"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Ayuda Guía</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenTutorial}
