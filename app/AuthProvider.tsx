@@ -30,6 +30,7 @@ const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | 
   preferredFormat: "Análisis",
   customHostVoice: "Paul",
   episodesCount: 0,
+  autoArchive: false,
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {

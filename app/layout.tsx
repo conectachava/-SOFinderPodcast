@@ -5,8 +5,13 @@ import './globals.css'; // Global styles
 import { AuthProvider } from './AuthProvider';
 
 export const metadata: Metadata = {
-  title: 'My Google AI Studio App',
-  description: 'My Google AI Studio App',
+  title: 'SourceFinder Pod | AI-Powered Verified Podcast Orchestrator',
+  description: 'Investigate facts, verify sources, generate multi-speaker scripts, and produce studio-grade podcasts powered by Gemini AI.',
+  openGraph: {
+    title: 'SourceFinder Pod | AI-Powered Verified Podcast Orchestrator',
+    description: 'Investigate facts, verify sources, generate multi-speaker scripts, and produce studio-grade podcasts powered by Gemini AI.',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

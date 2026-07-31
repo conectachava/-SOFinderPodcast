@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Layers, Play, CheckCircle2, Clock, Sparkles, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { PodcastStudioView } from "./PodcastStudioView";
 import { useToast } from "./Toast";
 import { PodcastHistoryItem } from "./RecentDrawer";
 import { useAuth } from "../app/AuthProvider";
+import { LandingHero } from "./LandingHero";
 
 interface OrchestratorViewProps {
   onSaveToHistory?: (item: PodcastHistoryItem) => void;
@@ -30,6 +31,7 @@ export function OrchestratorView({
 }: OrchestratorViewProps) {
   const { addToast } = useToast();
   const { user, profile, isAdmin } = useAuth();
+  const orchestratorRef = useRef<HTMLDivElement>(null);
 
   const [topic, setTopic] = useState(presetTopic || "Procesador Quantum Gemini y Computación Cuántica 2026");
   const [contentType, setContentType] = useState(presetContentType || "Noticia Tecnológica");
@@ -41,6 +43,57 @@ export function OrchestratorView({
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Batch Processing Queue state
+  const [batchTopics, setBatchTopics] = useState<string[]>([
+    "Avances en Computación Cuántica",
+    "Lanzamiento de Vehículos Autónomos 2026",
+    "Economía Global y Criptoactivos"
+  ]);
+  const [newBatchTopic, setNewBatchTopic] = useState("");
+  const [batchQueueStatus, setBatchQueueStatus] = useState<Record<string, "pending" | "processing" | "completed" | "error">>({});
+  const [batchProcessing, setBatchProcessing] = useState(false);
+
+  const handleAddBatchTopic = () => {
+    if (!newBatchTopic.trim()) return;
+    setBatchTopics([...batchTopics, newBatchTopic.trim()]);
+    setNewBatchTopic("");
+    addToast("Tema Añadido", "Tema agregado a la cola por lotes.", "info");
+  };
+
+  const handleRunBatchQueue = async () => {
+    if (batchTopics.length === 0) {
+      addToast("Cola Vacía", "Agrega al menos un tema a la cola.", "error");
+      return;
+    }
+    setBatchProcessing(true);
+    addToast("Cola Iniciada", `Procesando ${batchTopics.length} temas en segundo plano...`, "info");
+    const statusMap: Record<string, "pending" | "processing" | "completed" | "error"> = {};
+    batchTopics.forEach((t) => { statusMap[t] = "pending"; });
+    setBatchQueueStatus(statusMap);
+
+    for (const t of batchTopics) {
+      setBatchQueueStatus((prev) => ({ ...prev, [t]: "processing" }));
+      try {
+        const res = await fetch("/api/orchestrator", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: t,
+            contentType,
+            showFormat,
+            durationMinutes,
+          }),
+        });
+        if (!res.ok) throw new Error("Error");
+        setBatchQueueStatus((prev) => ({ ...prev, [t]: "completed" }));
+      } catch (err) {
+        setBatchQueueStatus((prev) => ({ ...prev, [t]: "error" }));
+      }
+    }
+    setBatchProcessing(false);
+    addToast("Cola de Lotes Finalizada", "Todos los temas de la cola han sido generados en segundo plano.", "success");
+  };
+
   const isApproved = isAdmin || profile?.status === "approved";
   const authMessage = !user 
     ? "Inicia sesión para generar podcasts." 
@@ -49,6 +102,10 @@ export function OrchestratorView({
       : profile?.status === "rejected"
         ? "Tu acceso ha sido denegado."
         : null;
+
+  const handleScrollToOrchestrator = () => {
+    orchestratorRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const handleRunPipeline = async () => {
     if (!isApproved) {
@@ -128,9 +185,12 @@ export function OrchestratorView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 p-4 sm:p-6">
+      {/* High-Converting Landing Hero highlighting user pain points & solution */}
+      <LandingHero onStartNow={handleScrollToOrchestrator} />
+
       {/* Pipeline Config Banner */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6 transition-colors">
+      <div ref={orchestratorRef} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6 transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
@@ -161,6 +221,7 @@ export function OrchestratorView({
                 type="button"
                 onClick={() => setTopic("TENDENCIAS")}
                 className="text-[10px] text-amber-600 font-bold hover:underline flex items-center gap-1"
+                title="Carga automáticamente temas trending analizados por IA"
               >
                 🔥 Cargar &quot;TENDENCIAS&quot; (Signal Analyst)
               </button>
@@ -170,6 +231,7 @@ export function OrchestratorView({
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="Ej: TENDENCIAS o NVIDIA RTX 5090 Blackwell..."
+              title="Tema sobre el cual la IA investigará fuentes verificadas y redactará el episodio"
               className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
@@ -181,6 +243,7 @@ export function OrchestratorView({
             <select
               value={contentType}
               onChange={(e) => setContentType(e.target.value)}
+              title="Selecciona la categoría de búsqueda web para filtrar y calificar fuentes de alta reputación"
               className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="Noticia Tecnológica">Noticia Tecnológica</option>
@@ -197,6 +260,7 @@ export function OrchestratorView({
             <select
               value={showFormat}
               onChange={(e) => setShowFormat(e.target.value as any)}
+              title="Define el tono editorial y la interacción entre locutores (Debate, Análisis o Opinión)"
               className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="Debate">Debate (Conflicto)</option>
@@ -276,9 +340,93 @@ export function OrchestratorView({
             <span>{error}</span>
           </div>
         )}
+
+        {/* BATCH PROCESSING QUEUE SECTION */}
+        <div className="pt-6 border-t border-slate-100 dark:border-slate-800 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-500" />
+              Cola de Procesamiento por Lotes (Batch Queue)
+            </h3>
+            <span className="text-[10px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
+              {batchTopics.length} temas en cola
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Añade múltiples temas de investigación para generar borradores de guion en segundo plano de forma automatizada.
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newBatchTopic}
+              onChange={(e) => setNewBatchTopic(e.target.value)}
+              placeholder="Añadir nuevo tema a la cola..."
+              className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddBatchTopic(); }}
+            />
+            <button
+              onClick={handleAddBatchTopic}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold rounded-lg text-xs transition-colors shrink-0"
+            >
+              Añadir a Cola
+            </button>
+            <button
+              onClick={handleRunBatchQueue}
+              disabled={batchProcessing || batchTopics.length === 0}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors shrink-0"
+            >
+              {batchProcessing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+              Procesar Cola
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {batchTopics.map((t, idx) => {
+              const status = batchQueueStatus[t] || "pending";
+              return (
+                <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono text-slate-400 text-[10px]">#{idx + 1}</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{t}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {status === "pending" && <span className="text-[10px] font-mono text-slate-500 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">Pendiente</span>}
+                    {status === "processing" && <span className="text-[10px] font-mono text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded animate-pulse">Procesando...</span>}
+                    {status === "completed" && <span className="text-[10px] font-mono text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">Completado ✓</span>}
+                    {status === "error" && <span className="text-[10px] font-mono text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded">Error ✕</span>}
+
+                    <button
+                      onClick={() => setBatchTopics(batchTopics.filter((_, i) => i !== idx))}
+                      className="text-slate-400 hover:text-rose-500 text-xs font-mono ml-2"
+                      title="Eliminar de cola"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Pipeline Output / Results */}
+      {loading && !result && (
+        <div className="p-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4 animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">⏳</div>
+            <div className="space-y-2 flex-1">
+              <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/3"></div>
+              <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/2"></div>
+            </div>
+          </div>
+          <div className="h-40 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+        </div>
+      )}
+
       {result && (
         <div className="space-y-6">
           <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg text-xs flex items-center justify-between">

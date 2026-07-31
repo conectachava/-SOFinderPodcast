@@ -14,10 +14,11 @@ import { PipelineProgress } from "@/components/PipelineProgress";
 import { RecentDrawer, PodcastHistoryItem } from "@/components/RecentDrawer";
 import { UserProfileModal, UserProfile } from "@/components/UserProfileModal";
 import { TutorialModal } from "@/components/TutorialModal";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { Shield, Sparkles, Activity } from "lucide-react";
 import { useAuth } from "./AuthProvider";
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function Home() {
@@ -56,7 +57,16 @@ export default function Home() {
   // Modals & Drawers state
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
-  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
+    try {
+      const onboarded = localStorage.getItem("sf_onboarded");
+      if (!onboarded) {
+        localStorage.setItem("sf_onboarded", "true");
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  });
 
   // Local history state
   const [history, setHistory] = useState<PodcastHistoryItem[]>([]);
@@ -105,6 +115,96 @@ export default function Home() {
     } catch (e) {}
   }, []);
 
+  // Load draft from Firestore on user login
+  useEffect(() => {
+    if (!user) return;
+    const loadDraft = async () => {
+      try {
+        const draftRef = doc(db, "users", user.uid, "drafts", "currentSession");
+        const docSnap = await getDoc(draftRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.reportText && !reportText) setReportText(data.reportText);
+          if (data.rawScript && !rawScript) setRawScript(data.rawScript);
+          if (data.scriptLines && data.scriptLines.length > 0 && scriptLines.length === 0) {
+            setScriptLines(data.scriptLines);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading draft:", e);
+      }
+    };
+    loadDraft();
+  }, [user]);
+
+  // Sync status for autosave
+  const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "idle">("saved");
+
+  const handleExportProject = () => {
+    const projectState = {
+      appName: "SourceFinder Pod v2.0",
+      exportedAt: new Date().toISOString(),
+      reportText,
+      rawScript,
+      scriptLines,
+      storyboardData,
+      selectedPreset,
+      history,
+    };
+    const blob = new Blob([JSON.stringify(projectState, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sourcefinder-project-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Keyboard shortcut system (Ctrl+S to save/sync, Ctrl+Enter to advance pipeline)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setSyncStatus("saving");
+        setTimeout(() => setSyncStatus("saved"), 600);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (activeTab === "orchestrator") setActiveTab("sourcefinder");
+        else if (activeTab === "sourcefinder") setActiveTab("script");
+        else if (activeTab === "script") setActiveTab("studio");
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]);
+
+  // Auto-save script progress to Firestore periodically
+  useEffect(() => {
+    if (!user) return;
+    queueMicrotask(() => setSyncStatus("saving"));
+    const timer = setTimeout(async () => {
+      try {
+        const draftRef = doc(db, "users", user.uid, "drafts", "currentSession");
+        await setDoc(
+          draftRef,
+          {
+            reportText: reportText || "",
+            rawScript: rawScript || "",
+            scriptLines: scriptLines || [],
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        setSyncStatus("saved");
+      } catch (e) {
+        console.error("Auto-save error:", e);
+        setSyncStatus("saved");
+      }
+    }, 3000); // 3 seconds debounce
+
+    return () => clearTimeout(timer);
+  }, [user, reportText, rawScript, scriptLines]);
+
   // Default sample script lines if user opens Podcast Studio directly
   const defaultSampleLines: ScriptLine[] = [
     {
@@ -139,12 +239,25 @@ export default function Home() {
   };
 
   const handleReRunTopicFromHistory = (item: PodcastHistoryItem) => {
+    const anyItem = item as any;
+    if (anyItem.report) setReportText(anyItem.report);
+    if (anyItem.scriptLines) setScriptLines(anyItem.scriptLines);
+    if (anyItem.rawScript) setRawScript(anyItem.rawScript);
     setSelectedPreset({
       topic: item.topic,
-      contentType: "Investigación Personalizada",
-      format: userProfile?.preferredFormat || "Análisis",
+      contentType: item.contentType || "Investigación Personalizada",
+      format: item.format || "Análisis",
     });
     setIsHistoryOpen(false);
+    setActiveTab("studio");
+  };
+
+  const handleClearSession = () => {
+    setReportText("");
+    setRawScript(undefined);
+    setScriptLines([]);
+    setStoryboardData(null);
+    setSelectedPreset(undefined);
     setActiveTab("orchestrator");
   };
 
@@ -160,6 +273,10 @@ export default function Home() {
           onOpenTutorial={() => setIsTutorialOpen(true)}
           theme={theme}
           onToggleTheme={toggleTheme}
+          history={history}
+          onSelectHistoryItem={handleReRunTopicFromHistory}
+          onExportProject={handleExportProject}
+          syncStatus={syncStatus}
         />
 
         {/* Main Workspace */}
@@ -171,49 +288,51 @@ export default function Home() {
             hasScript={scriptLines.length > 0} setActiveTab={setActiveTab}
           />
 
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[700px] flex flex-col relative transition-colors duration-200">
-            {activeTab === "orchestrator" && (
-              <OrchestratorView
-                onSaveToHistory={saveHistoryItem}
-                onUpdatePipelineData={(data) => {
-                  if (data.reportText) setReportText(data.reportText);
-                  if (data.rawScript) setRawScript(data.rawScript);
-                  if (data.scriptLines) setScriptLines(data.scriptLines);
-                  if (data.storyboardData) setStoryboardData(data.storyboardData);
-                }}
-                presetTopic={selectedPreset?.topic}
-                presetContentType={selectedPreset?.contentType}
-                presetFormat={selectedPreset?.format}
-              />
-            )}
+          <ErrorBoundary>
+            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[700px] flex flex-col relative transition-colors duration-200">
+              {activeTab === "orchestrator" && (
+                <OrchestratorView
+                  onSaveToHistory={saveHistoryItem}
+                  onUpdatePipelineData={(data) => {
+                    if (data.reportText) setReportText(data.reportText);
+                    if (data.rawScript) setRawScript(data.rawScript);
+                    if (data.scriptLines) setScriptLines(data.scriptLines);
+                    if (data.storyboardData) setStoryboardData(data.storyboardData);
+                  }}
+                  presetTopic={selectedPreset?.topic}
+                  presetContentType={selectedPreset?.contentType}
+                  presetFormat={selectedPreset?.format}
+                />
+              )}
 
-            {activeTab === "sourcefinder" && (
-              <SourceFinderView
-                onUseReportForScript={handleSourceFinderComplete}
-              />
-            )}
+              {activeTab === "sourcefinder" && (
+                <SourceFinderView
+                  onUseReportForScript={handleSourceFinderComplete}
+                />
+              )}
 
-            {activeTab === "script" && (
-              <ScriptStudioView
-                initialReport={reportText}
-                onSendToStudio={handleScriptStudioComplete}
-              />
-            )}
+              {activeTab === "script" && (
+                <ScriptStudioView
+                  initialReport={reportText}
+                  onSendToStudio={handleScriptStudioComplete}
+                />
+              )}
 
-            {activeTab === "studio" && (
-              <PodcastStudioView
-                scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
-                rawScript={rawScript}
-                topic={selectedPreset?.topic}
-              />
-            )}
+              {activeTab === "studio" && (
+                <PodcastStudioView
+                  scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
+                  rawScript={rawScript}
+                  topic={selectedPreset?.topic}
+                />
+              )}
 
-            {activeTab === "storyboard" && (
-              <StoryboardView storyboardData={storyboardData} />
-            )}
+              {activeTab === "storyboard" && (
+                <StoryboardView storyboardData={storyboardData} />
+              )}
 
-            {activeTab === "docs" && <DocsView />}
-          </div>
+              {activeTab === "docs" && <DocsView />}
+            </div>
+          </ErrorBoundary>
         </main>
 
         {/* Drawers & Modals */}
@@ -223,11 +342,13 @@ export default function Home() {
           history={history}
           onSelectTopic={handleReRunTopicFromHistory}
           onClearHistory={clearHistory}
+          onDeleteItems={(ids) => setHistory(history.filter(h => !ids.includes(h.id)))}
         />
 
         <UserProfileModal
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
+          onClearSession={handleClearSession}
         />
 
         <TutorialModal

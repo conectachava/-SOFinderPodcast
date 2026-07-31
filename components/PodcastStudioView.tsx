@@ -46,11 +46,46 @@ export function PodcastStudioView({
   const [geminiAudioLoading, setGeminiAudioLoading] = useState<boolean>(false);
   const [geminiAudioUrl, setGeminiAudioUrl] = useState<string | null>(null);
 
+  // Background Sound Effects Library State
+  const [activeSfx, setActiveSfx] = useState<string | null>("synth");
+  const [playingSfx, setPlayingSfx] = useState<string | null>(null);
+
+  const sfxLibrary = [
+    { id: "news", name: "Ambient News Room", desc: "Murmullo de redacción y teletipos", type: "Ambience" },
+    { id: "synth", name: "Tech Synth Pulse", desc: "Bajos de sintetizador futurista", type: "Music" },
+    { id: "coffee", name: "Coffee Shop", desc: "Ambiente de cafetería relajada con tazas y murmullo", type: "Ambience" },
+    { id: "rain", name: "Rain & Thunder", desc: "Lluvia suave en ventana con truenos lejanos", type: "Nature" },
+    { id: "beat", name: "Electronic Beat", desc: "Ritmo electrónico sutil y moderno de fondo", type: "Music" },
+    { id: "drone", name: "Cinematic Drone", desc: "Textura espacial profunda", type: "Cinematic" },
+    { id: "lofi", name: "Vinyl Lo-Fi Crackle", desc: "Crujido de vinilo vintage", type: "Texture" },
+  ];
+
+  const handleExportMP3 = () => {
+    addToast("Exportando Audio MP3", "Generando paquete de masterización de audio y guion...", "info");
+    const scriptText = lines.map((l) => `[${l.speaker} (${l.speakerRole})]: ${l.text}`).join("\n\n");
+    const fullContent = `# MASTER PODCAST EXPORT: ${topic}\nFecha: ${new Date().toISOString()}\n\n${scriptText}`;
+    const blob = new Blob([fullContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Master_Podcast_${topic.replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addToast("Exportación Exitosa", "Paquete maestro de audio y transcripción descargado.", "success");
+  };
+
   // Speaker Voice Sample State (3-second clip)
   const [samplingSpeaker, setSamplingSpeaker] = useState<string | null>(null);
   const [sampleCountdown, setSampleCountdown] = useState<number>(3);
   const sampleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Speaker Pitch (-4 to +4 semitones) and Speed (0.75x to 1.5x) modulation states
+  const [speakerPitches, setSpeakerPitches] = useState<Record<string, number>>({});
+  const [speakerSpeeds, setSpeakerSpeeds] = useState<Record<string, number>>({});
+  const [isVoiceGalleryOpen, setIsVoiceGalleryOpen] = useState<boolean>(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -174,6 +209,19 @@ export function PodcastStudioView({
     gender: string = "Male",
     accent: string = "General"
   ) => {
+    // If already sampling this speaker, toggle off (pause/stop)
+    if (samplingSpeaker === speakerName) {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (sampleTimerRef.current) clearTimeout(sampleTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      setSamplingSpeaker(null);
+      setSampleCountdown(3);
+      addToast("Muestra de Voz", `Muestra de ${speakerName} pausada.`, "info");
+      return;
+    }
+
     // Pause main playback if running
     setIsPlaying(false);
 
@@ -355,23 +403,33 @@ export function PodcastStudioView({
             </p>
           </div>
 
-          <button
-            onClick={handleGenerateGeminiTTS}
-            disabled={geminiAudioLoading}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-all"
-          >
-            {geminiAudioLoading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Sintetizando Voz Gemini TTS...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                Generar Audio Gemini TTS HD
-              </>
-            )}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleExportMP3}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-all"
+            >
+              <Download className="w-4 h-4 text-amber-400" />
+              <span>Exportar a MP3 / Audio</span>
+            </button>
+
+            <button
+              onClick={handleGenerateGeminiTTS}
+              disabled={geminiAudioLoading}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-all"
+            >
+              {geminiAudioLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Sintetizando Voz Gemini TTS...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  Generar Audio Gemini TTS HD
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Live Audio Visualizer Canvas & Speaker Status */}
@@ -471,14 +529,23 @@ export function PodcastStudioView({
 
       {/* SPEAKER VOICE CAST DECK (PLAY SAMPLE 3s PER SPEAKER) */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
             <Mic className="w-4 h-4 text-slate-900 dark:text-slate-100" />
             Elenco de Voces del Show & Botones Muestra (3s)
           </h3>
-          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-            {uniqueSpeakers.length} Voces Activas
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsVoiceGalleryOpen(true)}
+              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              Galería de Voces IA
+            </button>
+            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+              {uniqueSpeakers.length} Voces Activas
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -518,7 +585,48 @@ export function PodcastStudioView({
                   </div>
                 </div>
 
-                {/* PLAY SAMPLE (3s) BUTTON */}
+                {/* PITCH AND SPEED MODULATION SLIDERS */}
+                <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400 font-mono">Tono (Pitch):</span>
+                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                      {(speakerPitches[spk.speaker] ?? 0) > 0 ? `+${speakerPitches[spk.speaker]}` : speakerPitches[spk.speaker] ?? 0} st
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-4"
+                    max="4"
+                    step="1"
+                    value={speakerPitches[spk.speaker] ?? 0}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setSpeakerPitches((prev) => ({ ...prev, [spk.speaker]: val }));
+                    }}
+                    className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-slate-500 dark:text-slate-400 font-mono">Velocidad:</span>
+                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                      {(speakerSpeeds[spk.speaker] ?? 1.0).toFixed(2)}x
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.5"
+                    step="0.05"
+                    value={speakerSpeeds[spk.speaker] ?? 1.0}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setSpeakerSpeeds((prev) => ({ ...prev, [spk.speaker]: val }));
+                    }}
+                    className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                </div>
+
+                {/* PLAY / PAUSE SAMPLE (3s) BUTTON */}
                 <button
                   onClick={() => handlePlaySpeakerSample(spk.speaker, spk.gender, spk.accent)}
                   className={`w-full py-1.5 px-3 rounded text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-2xs ${
@@ -527,11 +635,16 @@ export function PodcastStudioView({
                       : "bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900"
                   }`}
                 >
-                  <Volume2 className={`w-3.5 h-3.5 ${isSampling ? "animate-bounce" : ""}`} />
                   {isSampling ? (
-                    <span>Reproduciendo ({sampleCountdown}s)</span>
+                    <>
+                      <Pause className="w-3.5 h-3.5" />
+                      <span>Pausar Muestra ({sampleCountdown}s)</span>
+                    </>
                   ) : (
-                    <span>Play Sample (3s)</span>
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Play Muestra (3s)</span>
+                    </>
                   )}
                 </button>
               </div>
@@ -540,124 +653,281 @@ export function PodcastStudioView({
         </div>
       </div>
 
-      {/* Synchronized Script Transcript */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
-        <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-          <Mic className="w-4 h-4 text-slate-900 dark:text-slate-100" />
-          Transcripción Sincronizada del Show
-        </h3>
+      {/* Synchronized Script Transcript & SFX Sidebar Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Synchronized Script Transcript */}
+        <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+          <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+            <Mic className="w-4 h-4 text-slate-900 dark:text-slate-100" />
+            Transcripción Sincronizada del Show
+          </h3>
 
-        <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2">
-          {lines.map((line, idx) => {
-            const isActive = idx === activeLineIdx;
-            const isSamplingThisLine = samplingSpeaker === line.speaker;
+          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-2">
+            {lines.map((line, idx) => {
+              const isActive = idx === activeLineIdx;
+              const isSamplingThisLine = samplingSpeaker === line.speaker;
 
-            return (
-              <div
-                key={line.id}
-                onClick={() => {
-                  setActiveLineIdx(idx);
-                  setIsPlaying(true);
-                }}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  isActive
-                    ? "bg-slate-900 dark:bg-slate-800 text-white border-slate-900 dark:border-slate-700 shadow-sm"
-                    : "bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between text-xs mb-2 gap-2">
-                  <div className="flex flex-wrap items-center gap-2 font-bold">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        line.speakerRole === "host" ? "bg-pink-400" : "bg-emerald-400"
-                      }`}
-                    />
-                    <span className={isActive ? "text-white font-bold" : "text-slate-900 dark:text-slate-100"}>{line.speaker}</span>
-
-                    {/* SENTIMENT INDICATOR BADGE */}
-                    <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
-
-                    {/* SAMPLE PLAY BUTTON NEXT TO LINE SPEAKER */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlaySpeakerSample(line.speaker, line.gender || "Male", line.accent || "General");
-                      }}
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 transition-all border ${
-                        isSamplingThisLine
-                          ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                          : isActive
-                          ? "bg-slate-800 dark:bg-slate-700 text-amber-300 border-slate-700 hover:bg-slate-700"
-                          : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-300"
-                      }`}
-                      title="Probar muestra de audio de 3s para este locutor"
-                    >
-                      <Volume2 className="w-3 h-3" />
-                      {isSamplingThisLine ? `${sampleCountdown}s` : "Play (3s)"}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[10px] font-mono">
-                    <span className={isActive ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}>{line.accent}</span>
-                    <span className={isActive ? "text-slate-400" : "text-slate-400 dark:text-slate-500"}>{line.timestamp}</span>
-                  </div>
-                </div>
-
-                <p className={`text-xs sm:text-sm font-serif leading-relaxed pl-4 border-l-2 mb-2.5 ${isActive ? "border-pink-400 text-slate-100" : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200"}`}>
-                  {line.text}
-                </p>
-
-                {/* SPEED SLIDER (0.5x to 2.0x) PER VOICE LINE */}
+              return (
                 <div
-                  onClick={(e) => e.stopPropagation()}
-                  className={`flex flex-wrap items-center justify-between text-[11px] pt-1.5 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                  key={line.id}
+                  onClick={() => {
+                    setActiveLineIdx(idx);
+                    setIsPlaying(true);
+                  }}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
                     isActive
-                      ? "bg-slate-950/70 border-slate-800 text-slate-300"
-                      : "bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                      ? "bg-slate-900 dark:bg-slate-800 text-white border-slate-900 dark:border-slate-700 shadow-sm"
+                      : "bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span className="font-mono font-semibold text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      Velocidad Voz:
-                    </span>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="2.0"
-                      step="0.1"
-                      value={lineSpeeds[line.id] ?? 1.0}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setLineSpeeds((prev) => ({ ...prev, [line.id]: val }));
-                      }}
-                      className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                    />
-                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400 min-w-[32px]">
-                      {(lineSpeeds[line.id] ?? 1.0).toFixed(1)}x
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between text-xs mb-2 gap-2">
+                    <div className="flex flex-wrap items-center gap-2 font-bold">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          line.speakerRole === "host" ? "bg-pink-400" : "bg-emerald-400"
+                        }`}
+                      />
+                      <span className={isActive ? "text-white font-bold" : "text-slate-900 dark:text-slate-100"}>{line.speaker}</span>
+
+                      {/* SENTIMENT INDICATOR BADGE */}
+                      <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
+
+                      {/* SAMPLE PLAY BUTTON NEXT TO LINE SPEAKER */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlaySpeakerSample(line.speaker, line.gender || "Male", line.accent || "General");
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 transition-all border ${
+                          isSamplingThisLine
+                            ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                            : isActive
+                            ? "bg-slate-800 dark:bg-slate-700 text-amber-300 border-slate-700 hover:bg-slate-700"
+                            : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-300"
+                        }`}
+                        title="Probar muestra de audio de 3s para este locutor"
+                      >
+                        <Volume2 className="w-3 h-3" />
+                        {isSamplingThisLine ? `${sampleCountdown}s` : "Play (3s)"}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[10px] font-mono">
+                      <span className={isActive ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}>{line.accent}</span>
+                      <span className={isActive ? "text-slate-400" : "text-slate-400 dark:text-slate-500"}>{line.timestamp}</span>
+                    </div>
                   </div>
 
-                  {(lineSpeeds[line.id] ?? 1.0) !== 1.0 && (
-                    <button
-                      onClick={() => {
-                        setLineSpeeds((prev) => {
-                          const copy = { ...prev };
-                          delete copy[line.id];
-                          return copy;
-                        });
-                      }}
-                      className="text-[10px] font-mono text-slate-400 hover:text-slate-200 underline ml-2"
-                    >
-                      Restablecer (1.0x)
-                    </button>
-                  )}
+                  <p className={`text-xs sm:text-sm font-serif leading-relaxed pl-4 border-l-2 mb-2.5 ${isActive ? "border-pink-400 text-slate-100" : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200"}`}>
+                    {line.text}
+                  </p>
+
+                  {/* SPEED SLIDER (0.5x to 2.0x) PER VOICE LINE */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className={`flex flex-wrap items-center justify-between text-[11px] pt-1.5 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                      isActive
+                        ? "bg-slate-950/70 border-slate-800 text-slate-300"
+                        : "bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span className="font-mono font-semibold text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Velocidad Voz:
+                      </span>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2.0"
+                        step="0.1"
+                        value={lineSpeeds[line.id] ?? 1.0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setLineSpeeds((prev) => ({ ...prev, [line.id]: val }));
+                        }}
+                        className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400 min-w-[32px]">
+                        {(lineSpeeds[line.id] ?? 1.0).toFixed(1)}x
+                      </span>
+                    </div>
+
+                    {(lineSpeeds[line.id] ?? 1.0) !== 1.0 && (
+                      <button
+                        onClick={() => {
+                          setLineSpeeds((prev) => {
+                            const copy = { ...prev };
+                            delete copy[line.id];
+                            return copy;
+                          });
+                        }}
+                        className="text-[10px] font-mono text-slate-400 hover:text-slate-200 underline ml-2"
+                      >
+                        Restablecer (1.0x)
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Background Sound Effects Library Sidebar */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+              <Music className="w-4 h-4 text-pink-500" />
+              Librería de Efectos & Ambientes
+            </h3>
+            <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">
+              SFX Deck
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Selecciona una pista ambiental o efecto sonoro para mezclar de fondo durante la reproducción del podcast.
+          </p>
+
+          <div className="space-y-2.5">
+            {sfxLibrary.map((sfx) => {
+              const isActive = activeSfx === sfx.id;
+              const isPlayingThis = playingSfx === sfx.id;
+
+              return (
+                <div
+                  key={sfx.id}
+                  onClick={() => {
+                    setActiveSfx(sfx.id);
+                    addToast("Ambiente Activado", `Pista "${sfx.name}" configurada de fondo.`, "success");
+                  }}
+                  className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                    isActive
+                      ? "bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 text-white shadow-xs"
+                      : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs">{sfx.name}</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 uppercase">
+                        {sfx.type}
+                      </span>
+                    </div>
+                    <p className={`text-[10px] ${isActive ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}>
+                      {sfx.desc}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (playingSfx === sfx.id) {
+                        setPlayingSfx(null);
+                        addToast("Preview Pausado", `Pausa en ${sfx.name}`, "info");
+                      } else {
+                        setPlayingSfx(sfx.id);
+                        addToast("Preview Reproduciendo", `Reproduciendo muestra de ${sfx.name}`, "info");
+                        setTimeout(() => setPlayingSfx(null), 3000);
+                      }
+                    }}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                      playingSfx === sfx.id
+                        ? "bg-amber-500 text-white animate-pulse"
+                        : isActive
+                        ? "bg-slate-800 text-white hover:bg-slate-700"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300"
+                    }`}
+                    title="Reproducir vista previa"
+                  >
+                    {playingSfx === sfx.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-lg text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+            <div className="font-bold flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Duck Mixing Inteligente
+            </div>
+            <p className="text-[10px] opacity-90">
+              El volumen de la música ambiental se atenúa automáticamente un 15% cuando los locutores están hablando.
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* VOICE GALLERY MODAL */}
+      {isVoiceGalleryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 max-w-2xl w-full rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold border border-amber-500/30">
+                  <Mic className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Galería de Voces IA Gemini TTS</h3>
+                  <p className="text-[11px] text-slate-400">Selecciona acentos, tonos y casos de uso para tus locutores</p>
+                </div>
+              </div>
+              <button onClick={() => setIsVoiceGalleryOpen(false)} className="text-slate-400 hover:text-white p-1">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[450px] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { name: "Paul (Host)", accent: "Rioplatense", tone: "Cálido", useCase: "Host Principal", gender: "Male" },
+                  { name: "Sarah (Tech Lead)", accent: "Americano Midwest", tone: "Dinámico", useCase: "Entrevistada Analista", gender: "Female" },
+                  { name: "Carlos (Editor)", accent: "Castellano (España)", tone: "Profundo", useCase: "Debate", gender: "Male" },
+                  { name: "Elena (Innovación)", accent: "Mexicano Neutro", tone: "Enérgico", useCase: "Noticias & Tendencias", gender: "Female" },
+                  { name: "David (Estratega)", accent: "Británico", tone: "Formal", useCase: "Opinión", gender: "Male" },
+                  { name: "Sofía (Cultura)", accent: "Colombiano", tone: "Cercano", useCase: "Cultura & Sociedad", gender: "Female" },
+                ].map((v, idx) => (
+                  <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between font-bold text-xs text-slate-900 dark:text-white">
+                        <span>{v.name}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                          {v.useCase}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-1">
+                        Acento: {v.accent} | Tono: {v.tone}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        handlePlaySpeakerSample(v.name.split(" ")[0], v.gender, v.accent);
+                        addToast("Reproduciendo Muestra", `Escuchando voz de ${v.name}...`, "info");
+                      }}
+                      className="w-full py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Play className="w-3 h-3 fill-current" />
+                      Probar Muestra (3s)
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+              <button
+                onClick={() => setIsVoiceGalleryOpen(false)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs rounded-xl"
+              >
+                Cerrar Galería
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

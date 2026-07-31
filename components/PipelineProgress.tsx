@@ -19,6 +19,7 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
       subLabel: "SourceFinder Búsqueda",
       icon: Search,
       isCompleted: hasReport,
+      estTime: "Tiempo estimado restante: ~1 min",
     },
     {
       id: "sourcefinder" as TabType,
@@ -26,6 +27,7 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
       subLabel: "Informe Verificado",
       icon: FileCheck,
       isCompleted: hasReport,
+      estTime: "Tiempo estimado restante: ~2 min",
     },
     {
       id: "script" as TabType,
@@ -33,6 +35,7 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
       subLabel: "Guionista v2.0",
       icon: FileText,
       isCompleted: hasScript,
+      estTime: "Tiempo estimado restante: ~1.5 min",
     },
     {
       id: "studio" as TabType,
@@ -40,6 +43,7 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
       subLabel: "Audio Deck Multivoz",
       icon: Mic,
       isCompleted: false,
+      estTime: "Tiempo estimado restante: ~3 min",
     },
   ];
 
@@ -63,9 +67,10 @@ export function PipelineProgress({ activeTab, setActiveTab, hasReport, hasScript
             <button
               key={idx}
               onClick={() => setActiveTab(step.id)}
+              title={step.estTime}
               className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all relative ${
                 isActive
-                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-sm"
+                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-md animate-pulse ring-2 ring-amber-500/50"
                   : step.isCompleted
                   ? "bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-slate-800 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
                   : "bg-slate-50/80 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"

@@ -14,16 +14,19 @@ export interface UserProfile {
   customHostVoice: string;
   episodesCount: number;
   isLoggedIn?: boolean;
+  autoArchive?: boolean;
 }
 
 interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onClearSession?: () => void;
 }
 
 export function UserProfileModal({
   isOpen,
   onClose,
+  onClearSession,
 }: UserProfileModalProps) {
   const { user, profile: authProfile, isAdmin, setProfile } = useAuth();
   const [localProfile, setLocalProfile] = useState<UserProfileWithStatus | null>(authProfile);
@@ -238,18 +241,45 @@ export function UserProfileModal({
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-800 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition-all"
                     />
                   </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="block text-xs font-medium text-slate-800">Auto-archivar Episodios</span>
+                      <span className="text-[10px] text-slate-500">Mueve episodios &gt; 30 días al Cloud Archive</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={!!localProfile.autoArchive}
+                      onChange={(e) => setLocalProfile({ ...localProfile, autoArchive: e.target.checked })}
+                      className="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-slate-900"
+                    />
+                  </div>
                 </div>
               )}
 
               {/* Actions */}
-              <div className="pt-2 flex items-center justify-between border-t border-slate-200">
-                <button
-                  onClick={handleLogout}
-                  className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 hover:underline"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Cerrar Sesión
-                </button>
+              <div className="pt-2 flex flex-wrap items-center justify-between border-t border-slate-200 gap-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 hover:underline"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Cerrar Sesión
+                  </button>
+                  {onClearSession && (
+                    <button
+                      onClick={() => {
+                        onClearSession();
+                        onClose();
+                      }}
+                      className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 hover:underline"
+                      title="Wipe current draft state and reset workspace"
+                    >
+                      🗑️ Limpiar Sesión Activa
+                    </button>
+                  )}
+                </div>
                 {(!isPending && !isRejected) && (
                   <button
                     onClick={handleSave}
