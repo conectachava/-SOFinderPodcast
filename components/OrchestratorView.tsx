@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Layers, Play, CheckCircle2, Clock, Sparkles, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
+import { Layers, Play, CheckCircle2, Clock, Sparkles, RefreshCw, AlertCircle, ShieldAlert, Tag, Plus, X } from "lucide-react";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { PodcastStudioView } from "./PodcastStudioView";
 import { useToast } from "./Toast";
 import { PodcastHistoryItem } from "./RecentDrawer";
 import { useAuth } from "../app/AuthProvider";
-
 
 interface OrchestratorViewProps {
   onSaveToHistory?: (item: PodcastHistoryItem) => void;
@@ -38,10 +37,30 @@ export function OrchestratorView({
   const [showFormat, setShowFormat] = useState<"Debate" | "Análisis" | "Opinión">(presetFormat || "Análisis");
   const [durationMinutes, setDurationMinutes] = useState(3);
 
+  // Custom Tagging state
+  const [tags, setTags] = useState<string[]>(["Tecnología", "IA"]);
+  const [customTagInput, setCustomTagInput] = useState("");
+
+  const presetTagSuggestions = ["Tecnología", "IA", "Cripto", "Noticias", "Análisis", "Entrevista", "Estrategia", "Futurismo"];
+
+  const handleAddTag = (tagToAdd: string) => {
+    const trimmed = tagToAdd.trim().replace(/^#/, "");
+    if (!trimmed) return;
+    if (!tags.includes(trimmed)) {
+      setTags([...tags, trimmed]);
+    }
+    setCustomTagInput("");
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter((t) => t !== tagToRemove));
+  };
+
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
+
 
   // Batch Processing Queue state
   const [batchTopics, setBatchTopics] = useState<string[]>([
@@ -172,6 +191,7 @@ export function OrchestratorView({
           }),
           scriptLinesCount: data.scriptLines?.length || 0,
           reportSnippet: data.reportText?.substring(0, 120) + "...",
+          tags: tags.length > 0 ? tags : [contentType, showFormat],
         });
       }
     } catch (err: any) {
@@ -186,6 +206,57 @@ export function OrchestratorView({
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
+      {/* QUICK TIPS POPOVER / BANNER */}
+      <div className="bg-gradient-to-r from-indigo-50 to-slate-50 dark:from-indigo-950/40 dark:to-slate-900 p-4 rounded-xl border border-indigo-200 dark:border-indigo-900 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+            💡
+          </div>
+          <div>
+            <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+              Quick Tips &amp; AI Agents (Orquestador Activo)
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Despliega agentes especializados en 1 clic para optimizar la investigación actual.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <button
+            onClick={() => {
+              setTopic("Verificación Avanzada: " + topic);
+              addToast("Fact-Checker Agent", "Fuentes cruzadas con bases de datos científicas y tecnológicas.", "success");
+            }}
+            className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 transition-colors"
+          >
+            <Sparkles className="w-3 h-3 text-indigo-500" />
+            <span>Fact-Checker Agent</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setContentType("Análisis de Producto");
+              addToast("Tone Optimizer", "Tono configurado para análisis profundo y persuasivo.", "success");
+            }}
+            className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 transition-colors"
+          >
+            <Sparkles className="w-3 h-3 text-emerald-500" />
+            <span>Tone Optimizer</span>
+          </button>
+
+          <button
+            onClick={() => {
+              addToast("Viral Hook Generator", "Gancho de apertura de 10s añadido al guion principal.", "success");
+            }}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 transition-colors"
+          >
+            <Sparkles className="w-3 h-3 text-amber-300" />
+            <span>Viral Hook 10s</span>
+          </button>
+        </div>
+      </div>
+
       {/* Pipeline Config Banner */}
       <div ref={orchestratorRef} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6 transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -229,7 +300,7 @@ export function OrchestratorView({
               onChange={(e) => setTopic(e.target.value)}
               placeholder="Ej: TENDENCIAS o NVIDIA RTX 5090 Blackwell..."
               title="Tema sobre el cual la IA investigará fuentes verificadas y redactará el episodio"
-              className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
 
@@ -241,7 +312,7 @@ export function OrchestratorView({
               value={contentType}
               onChange={(e) => setContentType(e.target.value)}
               title="Selecciona la categoría de búsqueda web para filtrar y calificar fuentes de alta reputación"
-              className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="Noticia Tecnológica">Noticia Tecnológica</option>
               <option value="Espectáculos">Espectáculos</option>
@@ -258,12 +329,88 @@ export function OrchestratorView({
               value={showFormat}
               onChange={(e) => setShowFormat(e.target.value as any)}
               title="Define el tono editorial y la interacción entre locutores (Debate, Análisis o Opinión)"
-              className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="Debate">Debate (Conflicto)</option>
               <option value="Análisis">Análisis (Mesa Redonda)</option>
               <option value="Opinión">Opinión (Entrevista)</option>
             </select>
+          </div>
+        </div>
+
+        {/* Custom Project Tagging System */}
+        <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-indigo-500" />
+              Etiquetas del Proyecto (Tagging)
+            </label>
+            <span className="text-[10px] text-slate-400">Etiqueta este proyecto para ordenarlo en el Historial</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-2xs"
+              >
+                <span>#{t}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(t)}
+                  className="text-indigo-400 hover:text-rose-500 transition-colors cursor-pointer"
+                  title="Eliminar etiqueta"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={customTagInput}
+                onChange={(e) => setCustomTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddTag(customTagInput);
+                  }
+                }}
+                placeholder="Añadir tag..."
+                className="px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-32"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddTag(customTagInput)}
+                className="p-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors cursor-pointer"
+                title="Añadir etiqueta"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Preset Tag Suggestions */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-[10px] text-slate-400 font-mono">Sugerencias:</span>
+            {presetTagSuggestions.map((st) => {
+              const isSelected = tags.includes(st);
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => (isSelected ? handleRemoveTag(st) : handleAddTag(st))}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                    isSelected
+                      ? "bg-indigo-600 text-white font-bold"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {isSelected ? `✓ #${st}` : `+#${st}`}
+                </button>
+              );
+            })}
           </div>
         </div>
 

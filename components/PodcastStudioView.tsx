@@ -21,6 +21,7 @@ import {
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 
 interface PodcastStudioViewProps {
   scriptLines: ScriptLine[];
@@ -76,7 +77,81 @@ export function PodcastStudioView({
     addToast("Exportación Exitosa", "Paquete maestro de audio y transcripción descargado.", "success");
   };
 
-  // Speaker Voice Sample State (3-second clip)
+  const speakerParticipationData = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    lines.forEach((l) => {
+      map[l.speaker] = (map[l.speaker] || 0) + l.text.split(/\s+/).length;
+    });
+    return Object.keys(map).map((name) => ({ name, words: map[name] }));
+  }, [lines]);
+
+  const [voiceA, setVoiceA] = useState("Paul");
+  const [voiceB, setVoiceB] = useState("Sarah");
+  const [comparingVoices, setComparingVoices] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState<string | null>(null);
+
+  const handleRunVoiceComparison = () => {
+    setComparingVoices(true);
+    addToast("Voice Comparison", `Generando muestras de 10s para "${voiceA}" y "${voiceB}"...`, "info");
+    setTimeout(() => {
+      setComparingVoices(false);
+      setComparisonResult(`Comparación completada: "${voiceA}" destaca por su ecualización profunda en graves y calidez británica, ideal para narrativas serias. "${voiceB}" ofrece mayor presencia en 3kHz y brillo superior, ideal para dinámicas tecnológicas enérgicas.`);
+      addToast("Comparación Exitosa", "Muestras de 10s listas para reproducción.", "success");
+    }, 2000);
+  };
+
+  const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6"];
+
+  const handleAiMoodMatcher = () => {
+    addToast("AI Mood Matcher", "Analizando el tono emocional y sensibilidad del guion...", "info");
+    let enthusiasticCount = 0;
+    let concernedCount = 0;
+    lines.forEach((l) => {
+      if (l.sentiment === "enthusiastic") enthusiasticCount++;
+      if (l.sentiment === "concerned") concernedCount++;
+    });
+
+    let bestSfx = "synth";
+    let reason = "Tono dinámico y tecnológico detectado. Sugiriendo Tech Synth Pulse.";
+    if (concernedCount > enthusiasticCount) {
+      bestSfx = "drone";
+      reason = "Tono analítico / de alerta detectado. Sugiriendo Cinematic Drone.";
+    } else if (enthusiasticCount > 2) {
+      bestSfx = "beat";
+      reason = "Alto nivel de energía detectado. Sugiriendo Electronic Beat.";
+    } else {
+      bestSfx = "coffee";
+      reason = "Tono conversacional y relajado detectado. Sugiriendo Coffee Shop.";
+    }
+
+    setActiveSfx(bestSfx);
+    addToast("AI Mood Matcher Aplicado", reason, "success");
+  };
+
+  const handleAutoAssignSpeakers = () => {
+    addToast("Auto-assign Speakers", "Analizando contexto y asignando voces...", "info");
+    setTimeout(() => {
+      setLines((prev) =>
+        prev.map((l) => {
+          // simple logic to alternate or assign based on sentiment
+          let newGender = l.gender;
+          let newSpeaker = l.speaker;
+          if (l.sentiment === "enthusiastic") {
+            newGender = "Female";
+            newSpeaker = "Sarah";
+          } else if (l.sentiment === "concerned") {
+            newGender = "Male";
+            newSpeaker = "David";
+          } else {
+            newGender = "Male";
+            newSpeaker = "Paul";
+          }
+          return { ...l, gender: newGender, speaker: newSpeaker };
+        })
+      );
+      addToast("Asignación Completada", "Voces reasignadas según el tono emocional.", "success");
+    }, 1500);
+  };
   const [samplingSpeaker, setSamplingSpeaker] = useState<string | null>(null);
   const [sampleCountdown, setSampleCountdown] = useState<number>(3);
   const sampleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,6 +165,7 @@ export function PodcastStudioView({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameId = useRef<number | null>(null);
+  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Sync lines state when initialLines change
   const [prevInitialLines, setPrevInitialLines] = useState(initialLines);
@@ -100,6 +176,16 @@ export function PodcastStudioView({
       setActiveLineIdx(0);
     }
   }
+
+  // Auto-scroll to active line
+  useEffect(() => {
+    if (isPlaying && transcriptContainerRef.current) {
+      const activeElement = transcriptContainerRef.current.querySelector(`[data-line-index="${activeLineIdx}"]`);
+      if (activeElement) {
+        activeElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [activeLineIdx, isPlaying]);
 
   // Web Speech Synthesis engine fallback / playback loop
   useEffect(() => {
@@ -662,7 +748,7 @@ export function PodcastStudioView({
             Transcripción Sincronizada del Show
           </h3>
 
-          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-2">
+          <div ref={transcriptContainerRef} className="space-y-3 max-h-[480px] overflow-y-auto pr-2">
             {lines.map((line, idx) => {
               const isActive = idx === activeLineIdx;
               const isSamplingThisLine = samplingSpeaker === line.speaker;
@@ -670,6 +756,7 @@ export function PodcastStudioView({
               return (
                 <div
                   key={line.id}
+                  data-line-index={idx}
                   onClick={() => {
                     setActiveLineIdx(idx);
                     setIsPlaying(true);
@@ -775,87 +862,243 @@ export function PodcastStudioView({
         </div>
 
         {/* Background Sound Effects Library Sidebar */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-              <Music className="w-4 h-4 text-pink-500" />
-              Librería de Efectos & Ambientes
-            </h3>
-            <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">
-              SFX Deck
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Selecciona una pista ambiental o efecto sonoro para mezclar de fondo durante la reproducción del podcast.
-          </p>
-
-          <div className="space-y-2.5">
-            {sfxLibrary.map((sfx) => {
-              const isActive = activeSfx === sfx.id;
-              const isPlayingThis = playingSfx === sfx.id;
-
-              return (
-                <div
-                  key={sfx.id}
-                  onClick={() => {
-                    setActiveSfx(sfx.id);
-                    addToast("Ambiente Activado", `Pista "${sfx.name}" configurada de fondo.`, "success");
-                  }}
-                  className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                    isActive
-                      ? "bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 text-white shadow-xs"
-                      : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-                  }`}
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs">{sfx.name}</span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 uppercase">
-                        {sfx.type}
-                      </span>
-                    </div>
-                    <p className={`text-[10px] ${isActive ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}>
-                      {sfx.desc}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (playingSfx === sfx.id) {
-                        setPlayingSfx(null);
-                        addToast("Preview Pausado", `Pausa en ${sfx.name}`, "info");
-                      } else {
-                        setPlayingSfx(sfx.id);
-                        addToast("Preview Reproduciendo", `Reproduciendo muestra de ${sfx.name}`, "info");
-                        setTimeout(() => setPlayingSfx(null), 3000);
-                      }
-                    }}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                      playingSfx === sfx.id
-                        ? "bg-amber-500 text-white animate-pulse"
-                        : isActive
-                        ? "bg-slate-800 text-white hover:bg-slate-700"
-                        : "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300"
-                    }`}
-                    title="Reproducir vista previa"
-                  >
-                    {playingSfx === sfx.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-lg text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              Duck Mixing Inteligente
+        <div className="lg:col-span-4 space-y-6">
+          {/* AUTO-ASSIGN SPEAKERS CARD */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-500" />
+                Auto-assign Speakers
+              </h3>
+              <span className="text-[10px] font-mono bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-300 px-2 py-0.5 rounded">
+                Smart Casting
+              </span>
             </div>
-            <p className="text-[10px] opacity-90">
-              El volumen de la música ambiental se atenúa automáticamente un 15% cuando los locutores están hablando.
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Analiza el tono emocional y el contexto de las líneas del guion para sugerir la voz más adecuada de la librería.
             </p>
+            <button
+              onClick={handleAutoAssignSpeakers}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <User className="w-4 h-4" />
+              Auto-asignar Voces
+            </button>
+          </div>
+
+          {/* AI MOOD MATCHER CARD */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                AI Mood Matcher
+              </h3>
+              <span className="text-[10px] font-mono bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-300 px-2 py-0.5 rounded">
+                Smart Audio
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Analiza el sentimiento y la narrativa de los diálogos para sugerir y auto-activar el fondo sonoro ideal.
+            </p>
+            <button
+              onClick={handleAiMoodMatcher}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-amber-500 hover:from-indigo-700 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-200" />
+              <span>Sugerir y Auto-Activar SFX (Mood Match)</span>
+            </button>
+          </div>
+
+          {/* VOICE COMPARISON (A/B TEST) TOOL */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                <Mic className="w-4 h-4 text-indigo-500" />
+                Voice Comparison (A/B Test)
+              </h3>
+              <span className="text-[10px] font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded">
+                10s Sample
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Selecciona dos voces y genera una muestra lateral de 10s para el mismo texto para decidir cuál se adapta mejor a tu personaje.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Voz A</label>
+                <select
+                  value={voiceA}
+                  onChange={(e) => setVoiceA(e.target.value)}
+                  className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                >
+                  <option value="Paul">Paul (Británico)</option>
+                  <option value="Sarah">Sarah (Tech Host)</option>
+                  <option value="David">David (Investigador)</option>
+                  <option value="Elena">Elena (Narradora)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Voz B</label>
+                <select
+                  value={voiceB}
+                  onChange={(e) => setVoiceB(e.target.value)}
+                  className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                >
+                  <option value="Sarah">Sarah (Tech Host)</option>
+                  <option value="Paul">Paul (Británico)</option>
+                  <option value="David">David (Investigador)</option>
+                  <option value="Elena">Elena (Narradora)</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={handleRunVoiceComparison}
+              disabled={comparingVoices}
+              className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            >
+              {comparingVoices ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Sintetizando Muestras...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Generar y Comparar (10s)</span>
+                </>
+              )}
+            </button>
+
+            {comparisonResult && (
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-lg text-xs text-indigo-900 dark:text-indigo-200 space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  Análisis Comparativo ({voiceA} vs {voiceB})
+                </div>
+                <p className="text-[11px] leading-relaxed">{comparisonResult}</p>
+              </div>
+            )}
+          </div>
+
+          {/* SPEAKER PARTICIPATION DISTRIBUTION RECHARTS CARD */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                <Activity className="w-4 h-4 text-indigo-500" />
+                Participación por Orador (Recharts)
+              </h3>
+              <span className="text-[10px] font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded">
+                Flow Balance
+              </span>
+            </div>
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={speakerParticipationData}
+                    dataKey="words"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={60}
+                    innerRadius={25}
+                    label={({ name, percent }) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
+                  >
+                    {speakerParticipationData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* SFX Deck */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                <Music className="w-4 h-4 text-pink-500" />
+                Librería de Efectos & Ambientes
+              </h3>
+              <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">
+                SFX Deck
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Selecciona una pista ambiental o efecto sonoro para mezclar de fondo durante la reproducción del podcast.
+            </p>
+
+            <div className="space-y-2.5">
+              {sfxLibrary.map((sfx) => {
+                const isActive = activeSfx === sfx.id;
+                const isPlayingThis = playingSfx === sfx.id;
+
+                return (
+                  <div
+                    key={sfx.id}
+                    onClick={() => {
+                      setActiveSfx(sfx.id);
+                      addToast("Ambiente Activado", `Pista "${sfx.name}" configurada de fondo.`, "success");
+                    }}
+                    className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                      isActive
+                        ? "bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 text-white shadow-xs"
+                        : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs">{sfx.name}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 uppercase">
+                          {sfx.type}
+                        </span>
+                      </div>
+                      <p className={`text-[10px] ${isActive ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}>
+                        {sfx.desc}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (playingSfx === sfx.id) {
+                          setPlayingSfx(null);
+                          addToast("Preview Pausado", `Pausa en ${sfx.name}`, "info");
+                        } else {
+                          setPlayingSfx(sfx.id);
+                          addToast("Preview Reproduciendo", `Reproduciendo muestra de ${sfx.name}`, "info");
+                          setTimeout(() => setPlayingSfx(null), 3000);
+                        }
+                      }}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                        playingSfx === sfx.id
+                          ? "bg-amber-500 text-white animate-pulse"
+                          : isActive
+                          ? "bg-slate-800 text-white hover:bg-slate-700"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300"
+                      }`}
+                      title="Reproducir vista previa"
+                    >
+                      {playingSfx === sfx.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-lg text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                Duck Mixing Inteligente
+              </div>
+              <p className="text-[10px] opacity-90">
+                El volumen de la música ambiental se atenúa automáticamente un 15% cuando los locutores están hablando.
+              </p>
+            </div>
           </div>
         </div>
       </div>

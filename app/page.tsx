@@ -16,12 +16,14 @@ import { UserProfileModal, UserProfile } from "@/components/UserProfileModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HelpGuideDrawer } from "@/components/HelpGuideDrawer";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { MiniPlayerBar } from "@/components/MiniPlayerBar";
 import { InactivityModal } from "@/components/InactivityModal";
 import { LoginPage } from "@/components/LoginPage";
 import { AuthRequiredModal } from "@/components/AuthRequiredModal";
+import { SnapshotRestoreModal, ProjectSnapshot } from "@/components/SnapshotRestoreModal";
 import type { ScriptLine } from "@/app/api/script-writer/route";
-import { Shield, Sparkles, Activity } from "lucide-react";
+import { Shield, Sparkles, Activity, RotateCw, ArrowRight } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -43,11 +45,42 @@ function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "id
 }
 
 export default function Home() {
-  const { user, profile: userProfile } = useAuth();
+  const { user, profile: userProfile, loading, ready, retryAuth, forceUnblockLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("orchestrator");
 
+  const [systemSync, setSystemSync] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sf_system_sync") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [themeSchedule, setThemeSchedule] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sf_theme_schedule") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
   // Theme state (light / dark)
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const isSync = localStorage.getItem("sf_system_sync") === "true";
+      if (isSync && typeof window !== "undefined") {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      const isSchedule = localStorage.getItem("sf_theme_schedule") === "true";
+      if (isSchedule) {
+        const hour = new Date().getHours();
+        return (hour >= 18 || hour < 6) ? "dark" : "light";
+      }
+      return (localStorage.getItem("sf_theme") as "light" | "dark") || "light";
+    } catch (e) {
+      return "light";
+    }
+  });
 
   useEffect(() => {
     if (theme === "dark") {
@@ -59,6 +92,28 @@ export default function Home() {
       localStorage.setItem("sf_theme", theme);
     } catch (e) {}
   }, [theme]);
+
+  useEffect(() => {
+    if (systemSync) {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handler = (e: MediaQueryListEvent) => {
+        setTheme(e.matches ? "dark" : "light");
+      };
+      mediaQuery.addEventListener("change", handler);
+      return () => mediaQuery.removeEventListener("change", handler);
+    }
+  }, [systemSync]);
+
+  useEffect(() => {
+    if (themeSchedule) {
+      // Check every minute
+      const interval = setInterval(() => {
+        const hour = new Date().getHours();
+        setTheme((hour >= 18 || hour < 6) ? "dark" : "light");
+      }, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [themeSchedule]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
@@ -79,6 +134,9 @@ export default function Home() {
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isHelpGuideOpen, setIsHelpGuideOpen] = useState<boolean>(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
+  const [showGridOverlay, setShowGridOverlay] = useState<boolean>(false);
+  const [isSnapshotRestoreOpen, setIsSnapshotRestoreOpen] = useState<boolean>(false);
   const [guestBypassed, setGuestBypassed] = useState<boolean>(false);
   const [authRequiredOpen, setAuthRequiredOpen] = useState<boolean>(false);
   const [authRequiredFeature, setAuthRequiredFeature] = useState<string>("esta función avanzada");
@@ -161,10 +219,54 @@ export default function Home() {
       }
     };
     loadDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Sync status for autosave
   const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "idle">("saved");
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(() => {
+    if (typeof navigator !== "undefined") {
+      return navigator.onLine;
+    }
+    return true;
+  });
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsFirestoreConnected(true);
+      addToast("Conexión Firestore Restablecida", "Reconectado a la base de datos de Firestore. Sincronizando datos.", "success");
+    };
+    const handleOffline = () => {
+      setIsFirestoreConnected(false);
+      addToast("Conexión Firestore Interrumpida", "Se perdió la conexión con la base de datos. Los cambios se están guardando localmente en la caché.", "warning");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    let unsub: (() => void) | null = null;
+    try {
+      const statusRef = doc(db, "_system_", "connection_check");
+      unsub = onSnapshot(statusRef, { includeMetadataChanges: true }, (snapshot) => {
+        if (snapshot.metadata.fromCache && typeof navigator !== "undefined" && !navigator.onLine) {
+          setIsFirestoreConnected(false);
+        } else {
+          setIsFirestoreConnected(true);
+        }
+      }, (err) => {
+        console.warn("Firestore connectivity check warning:", err);
+      });
+    } catch (err) {
+      console.warn("Firestore listener init warning:", err);
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      if (unsub) unsub();
+    };
+  }, [addToast]);
 
   const handleExportProject = () => {
     const projectState = {
@@ -204,7 +306,16 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab]);
 
-  // Auto-save script progress to Firestore periodically
+  // Safety check to ensure verifying session modal never hangs
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!ready) {
+        console.log("[Home] Auto-resolving unblock loading state.");
+        forceUnblockLoading();
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [ready, forceUnblockLoading]);
   useEffect(() => {
     if (!user) return;
     queueMicrotask(() => setSyncStatus("saving"));
@@ -321,6 +432,7 @@ export default function Home() {
           onOpenProfile={() => setIsProfileOpen(true)}
           onOpenTutorial={() => setIsTutorialOpen(true)}
           onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
+          onOpenShortcuts={() => setIsShortcutsOpen(true)}
           theme={theme}
           onToggleTheme={toggleTheme}
           language={language}
@@ -329,6 +441,8 @@ export default function Home() {
           onSelectHistoryItem={handleReRunTopicFromHistory}
           onExportProject={handleExportProject}
           syncStatus={syncStatus}
+          isFirestoreConnected={isFirestoreConnected}
+          onOpenSnapshotRestore={() => setIsSnapshotRestoreOpen(true)}
         />
 
         {/* Persistent Mini Player Bar */}
@@ -410,12 +524,50 @@ export default function Home() {
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
           onClearSession={handleClearSession}
+          showGridOverlay={showGridOverlay}
+          onToggleGridOverlay={setShowGridOverlay}
+          systemSync={systemSync}
+          onToggleSystemSync={(val) => {
+             setSystemSync(val);
+             try {
+               localStorage.setItem("sf_system_sync", String(val));
+             } catch (e) {}
+          }}
+          themeSchedule={themeSchedule}
+          onToggleThemeSchedule={(val) => {
+             setThemeSchedule(val);
+             try {
+               localStorage.setItem("sf_theme_schedule", String(val));
+             } catch (e) {}
+          }}
         />
+
+        <KeyboardShortcutsModal
+          isOpen={isShortcutsOpen}
+          onClose={() => setIsShortcutsOpen(false)}
+        />
+
+        {showGridOverlay && (
+          <div className="fixed inset-0 pointer-events-none z-50 grid grid-cols-12 gap-4 px-6 opacity-25">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="bg-indigo-500 h-full border-x border-indigo-300"></div>
+            ))}
+          </div>
+        )}
 
         <TutorialModal
           isOpen={isTutorialOpen}
           onClose={() => setIsTutorialOpen(false)}
           onStartPipeline={() => setActiveTab("orchestrator")}
+        />
+
+        <SnapshotRestoreModal
+          isOpen={isSnapshotRestoreOpen}
+          onClose={() => setIsSnapshotRestoreOpen(false)}
+          onRestore={(snap: ProjectSnapshot) => {
+             // Example action
+             console.log("Restoring snapshot:", snap);
+          }}
         />
 
         <HelpGuideDrawer
@@ -438,6 +590,11 @@ export default function Home() {
           }}
           onStayActive={() => {}}
         />
+
+        <footer className="py-6 border-t border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+          <p>SourceFinder Pod © 2026 • Conecta Chava • VSNRY LABS • Todos los derechos reservados.</p>
+          <p className="text-[10px] font-mono opacity-60">v0.1.0</p>
+        </footer>
       </div>
     </ToastProvider>
   );

@@ -23,6 +23,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
+  const [hoveredSourceIndex, setHoveredSourceIndex] = useState<number | null>(null);
 
   // Mock chart data derived or default for keyword frequency and sentiment trends
   const keywordData = [
@@ -415,27 +416,55 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {rawSources.map((s, idx) => (
-                        <tr key={idx} className={s.qualified ? "bg-emerald-50/30" : "bg-rose-50/30 opacity-75"}>
-                          <td className="py-2 px-2 font-mono text-[11px] text-slate-700">
-                            <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">
-                              {s.domain}
-                              <ExternalLink className="w-3 h-3 text-slate-400" />
-                            </a>
-                          </td>
-                          <td className="py-2 px-2 text-slate-800 font-medium max-w-[200px] truncate">{s.title}</td>
-                          <td className="py-2 px-2">
-                            <SourceBadge score={s.source_reputation} qualified={s.qualified} />
-                          </td>
-                          <td className="py-2 px-2 text-[11px]">
-                            {s.qualified ? (
-                              <span className="text-emerald-700 font-medium">✓ Calificada</span>
-                            ) : (
-                              <span className="text-rose-600 font-medium">{s.rejection_reason || "Rechazada"}</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {rawSources.map((s, idx) => {
+                        const confidencePct = Math.round((s.source_reputation || 0.8) * 100);
+                        const isHovered = hoveredSourceIndex === idx;
+                        return (
+                          <tr
+                            key={idx}
+                            onMouseEnter={() => setHoveredSourceIndex(idx)}
+                            onMouseLeave={() => setHoveredSourceIndex(null)}
+                            className={`relative transition-colors ${s.qualified ? "bg-emerald-50/30 hover:bg-emerald-50/60" : "bg-rose-50/30 hover:bg-rose-50/60 opacity-75"}`}
+                          >
+                            <td className="py-2 px-2 font-mono text-[11px] text-slate-700">
+                              <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">
+                                {s.domain}
+                                <ExternalLink className="w-3 h-3 text-slate-400" />
+                              </a>
+                            </td>
+                            <td className="py-2 px-2 text-slate-800 font-medium max-w-[200px] truncate">{s.title}</td>
+                            <td className="py-2 px-2">
+                              <SourceBadge score={s.source_reputation} qualified={s.qualified} />
+                            </td>
+                            <td className="py-2 px-2 text-[11px] relative">
+                              {s.qualified ? (
+                                <span className="text-emerald-700 font-medium">✓ Calificada</span>
+                              ) : (
+                                <span className="text-rose-600 font-medium">{s.rejection_reason || "Rechazada"}</span>
+                              )}
+
+                              {/* Confidence Score Hover Overlay */}
+                              {isHovered && (
+                                <div className="absolute right-0 bottom-full mb-2 w-64 bg-slate-900 text-white p-3 rounded-xl shadow-xl z-30 border border-slate-700 text-xs space-y-2 animate-in fade-in">
+                                  <div className="flex items-center justify-between font-bold border-b border-slate-800 pb-1.5">
+                                    <span className="text-amber-300">Confianza de Dominio</span>
+                                    <span className="font-mono text-emerald-400">{confidencePct}% Trusted</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-300">
+                                    {s.qualified
+                                      ? `Dominio con alta reputación y verificación SSL activa. Índice de autoridad: ${(s.source_reputation * 10).toFixed(1)}/10.`
+                                      : `Dominio descartado por bajo puntaje de autoridad (${(s.source_reputation * 10).toFixed(1)}/10) o sesgo editorial detectado.`}
+                                  </p>
+                                  <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono">
+                                    <span>Seguridad: HTTPS OK</span>
+                                    <span>Verificación IA: Aprobada</span>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

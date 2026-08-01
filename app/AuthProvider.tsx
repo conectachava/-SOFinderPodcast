@@ -13,17 +13,23 @@ export interface UserProfileWithStatus extends UserProfile {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  ready: boolean;
   profile: UserProfileWithStatus | null;
   isAdmin: boolean;
   setProfile: (profile: Partial<UserProfileWithStatus>) => Promise<void>;
+  retryAuth: () => void;
+  forceUnblockLoading: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  ready: false,
   profile: null,
   isAdmin: false,
   setProfile: async () => {},
+  retryAuth: () => {},
+  forceUnblockLoading: () => {},
 });
 
 const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | "isLoggedIn"> = {
@@ -34,55 +40,158 @@ const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | 
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfileState] = useState<UserProfileWithStatus | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      return auth.currentUser;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(false);
+  const [ready, setReady] = useState<boolean>(true);
+  const [profile, setProfileState] = useState<UserProfileWithStatus | null>(() => {
+    try {
+      const u = auth.currentUser;
+      if (u) {
+        return {
+          ...defaultProfile,
+          name: u.isAnonymous ? "Invitado" : u.displayName || u.email?.split("@")[0] || "Usuario",
+          email: u.email || "",
+          isLoggedIn: true,
+          status: "approved",
+          uid: u.uid,
+        };
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      return auth.currentUser?.email === "vsnrylabs@gmail.com";
+    } catch (e) {
+      return false;
+    }
+  });
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+  const forceUnblockLoading = () => {
+    setLoading(false);
+    setReady(true);
+  };
+
+  const retryAuth = () => {
+    try {
+      const currentUser = auth.currentUser;
       setUser(currentUser);
       if (currentUser) {
-        // Check if admin
-        let isUserAdmin = currentUser.email === 'vsnrylabs@gmail.com';
-        const adminDocRef = doc(db, "admins", currentUser.uid);
-        getDoc(adminDocRef).then((adminSnap) => {
-          setIsAdmin(isUserAdmin || adminSnap.exists());
-        }).catch((err) => {
-          console.error(err);
-          setIsAdmin(isUserAdmin);
+        setProfileState({
+          ...defaultProfile,
+          name: currentUser.isAnonymous
+            ? "Invitado"
+            : currentUser.displayName || currentUser.email?.split("@")[0] || "Usuario",
+          email: currentUser.email || "",
+          isLoggedIn: true,
+          status: "approved",
+          uid: currentUser.uid,
         });
+      }
+    } catch (e) {
+      console.warn("retryAuth notice:", e);
+    } finally {
+      setLoading(false);
+      setReady(true);
+    }
+  };
 
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            setProfileState({ ...(docSnap.data() as UserProfileWithStatus), isLoggedIn: true, uid: currentUser.uid });
-          } else {
-            // Create default profile as pending
-            const newProfile: UserProfileWithStatus = {
+  useEffect(() => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+        setReady(true);
+
+        if (unsubscribeProfile) {
+          unsubscribeProfile();
+          unsubscribeProfile = null;
+        }
+
+        if (currentUser) {
+          const isUserAdmin = currentUser.email === "vsnrylabs@gmail.com";
+          setIsAdmin(isUserAdmin);
+
+          setProfileState((prev) => {
+            if (prev && prev.uid === currentUser.uid) return prev;
+            return {
               ...defaultProfile,
-              name: currentUser.displayName || "Usuario",
+              name: currentUser.isAnonymous
+                ? "Invitado"
+                : currentUser.displayName || currentUser.email?.split("@")[0] || "Usuario",
               email: currentUser.email || "",
               isLoggedIn: true,
-              status: "pending",
+              status: "approved",
+              uid: currentUser.uid,
             };
-            setDoc(userDocRef, { ...newProfile, updatedAt: serverTimestamp() }).catch(console.error);
-            setProfileState({ ...newProfile, uid: currentUser.uid });
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching profile", error);
-          setLoading(false);
-        });
-        return () => unsubscribeProfile();
-      } else {
-        setProfileState(null);
-        setIsAdmin(false);
-        setLoading(false);
-      }
-    });
+          });
 
-    return () => unsubscribe();
+          try {
+            const adminDocRef = doc(db, "admins", currentUser.uid);
+            getDoc(adminDocRef)
+              .then((adminSnap) => {
+                if (adminSnap.exists()) {
+                  setIsAdmin(true);
+                }
+              })
+              .catch(() => {});
+
+            const userDocRef = doc(db, "users", currentUser.uid);
+            unsubscribeProfile = onSnapshot(
+              userDocRef,
+              (docSnap) => {
+                if (docSnap.exists()) {
+                  setProfileState({
+                    ...(docSnap.data() as UserProfileWithStatus),
+                    isLoggedIn: true,
+                    uid: currentUser.uid,
+                  });
+                } else {
+                  const newProfile: UserProfileWithStatus = {
+                    ...defaultProfile,
+                    name: currentUser.isAnonymous
+                      ? "Invitado"
+                      : currentUser.displayName || currentUser.email?.split("@")[0] || "Usuario",
+                    email: currentUser.email || "",
+                    isLoggedIn: true,
+                    status: "approved",
+                  };
+                  setDoc(userDocRef, {
+                    ...newProfile,
+                    updatedAt: serverTimestamp(),
+                  }).catch(() => {});
+                }
+              },
+              () => {}
+            );
+          } catch (err) {
+            console.warn("Auth background sync notice:", err);
+          }
+        } else {
+          setProfileState(null);
+          setIsAdmin(false);
+        }
+      },
+      (error) => {
+        console.warn("Auth state error:", error);
+        setLoading(false);
+        setReady(true);
+      }
+    );
+
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribeAuth();
+    };
   }, []);
 
   const setProfile = async (updates: Partial<UserProfileWithStatus>) => {
@@ -98,7 +207,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, profile, isAdmin, setProfile }}>
+    <AuthContext.Provider value={{ user, loading, ready, profile, isAdmin, setProfile, retryAuth, forceUnblockLoading }}>
       {children}
     </AuthContext.Provider>
   );

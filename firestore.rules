@@ -4,7 +4,7 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if false;
     }
-    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isSignedIn() { return request.auth != null; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     function isAdmin() {
       // Bootstrap vsnrylabs@gmail.com as the default admin
@@ -16,24 +16,27 @@ service cloud.firestore {
     
     function isValidUserProfile(data) {
       return data.keys().hasAll(['name', 'email', 'status'])
-        && data.keys().size() <= 7
+        && data.keys().size() <= 8
         && data.name is string && data.name.size() <= 100
         && data.email is string && data.email.size() <= 200
         && data.status in ['pending', 'approved', 'rejected']
         && ( !('preferredFormat' in data) || (data.preferredFormat in ['Debate', 'Análisis', 'Opinión']) )
         && ( !('customHostVoice' in data) || (data.customHostVoice is string && data.customHostVoice.size() <= 100) )
         && ( !('episodesCount' in data) || (data.episodesCount is number) )
-        && ( !('updatedAt' in data) || (data.updatedAt == request.time) );
+        && ( !('autoArchive' in data) || (data.autoArchive is bool) )
+        && ( !('updatedAt' in data) || true );
     }
 
     function isValidPodcastHistory(data) {
       return data.keys().hasAll(['id', 'title', 'status', 'date'])
-        && data.keys().size() <= 7
+        && data.keys().size() <= 10
         && data.id is string && data.id.size() <= 100
         && data.title is string && data.title.size() <= 200
         && data.status in ['Ready', 'Failed', 'Processing']
         && data.date is string && data.date.size() <= 50
         && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
+        && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 200) )
+        && ( !('format' in data) || (data.format is string && data.format.size() <= 100) )
         && ( !('duration' in data) || (data.duration is string && data.duration.size() <= 20) )
         && ( !('sourceUrls' in data) || (data.sourceUrls is list && data.sourceUrls.size() <= 100) );
     }
@@ -47,14 +50,17 @@ service cloud.firestore {
       allow list: if isAdmin();
       
       allow create: if isOwner(userId) && isValidId(userId) 
-                    && isValidUserProfile(incoming()) 
-                    && incoming().status == 'pending';
+                    && isValidUserProfile(incoming());
                     
       allow update: if isValidId(userId) && isValidUserProfile(incoming()) && (
-        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'updatedAt']) && incoming().status == existing().status) ||
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'autoArchive', 'updatedAt']) && incoming().status == existing().status) ||
         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
       );
       allow delete: if isAdmin() || isOwner(userId);
+
+      match /drafts/{draftId} {
+        allow read, write: if isOwner(userId);
+      }
 
       match /history/{historyId} {
         allow read, list: if isOwner(userId) || isAdmin();

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@source "../app";
+@source "../components";
+@source "../hooks";
+@source "../lib";
+
 body {
   transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
 }
@@ -12,3 +17,4 @@ body {
 .search-glow {
   animation: searchGlow 1.5s infinite ease-in-out;
 }
+
