@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Radio, Sparkles, ArrowRight, CheckCircle2, Lock, Cpu, Mail, Phone, LockKeyhole, UserPlus, LogIn, KeyRound, Github, HelpCircle, Calculator, ShieldCheck, Layers, FileText } from "lucide-react";
+import { Radio, Sparkles, ArrowRight, CheckCircle2, Lock, Cpu, Mail, Phone, LockKeyhole, UserPlus, LogIn, KeyRound, HelpCircle, Calculator, ShieldCheck, Layers, FileText } from "lucide-react";
 import {
   signInWithPopup,
   GoogleAuthProvider,
   FacebookAuthProvider,
-  GithubAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -90,27 +89,6 @@ export function LoginPage({ onBypassGuest }: LoginPageProps) {
         addToast("Aviso de cuenta", "Ya existe una cuenta registrada con este correo usando otro proveedor.", "info");
       } else {
         addToast("Error Facebook", "No se pudo completar el acceso con Facebook. Intenta de nuevo.", "error");
-      }
-    } finally {
-      setLoadingMethod(null);
-    }
-  };
-
-  // GitHub Login
-  const handleGithubLogin = async () => {
-    setLoadingMethod("github");
-    try {
-      const provider = new GithubAuthProvider();
-      await signInWithPopup(auth, provider);
-      addToast("¡Bienvenido!", "Sesión iniciada con éxito mediante GitHub.", "success");
-    } catch (error: any) {
-      console.error(error);
-      if (error.code === "auth/popup-closed-by-user") {
-        addToast("Aviso", "Ventana de autenticación cerrada.", "info");
-      } else if (error.code === "auth/account-exists-with-different-credential") {
-        addToast("Aviso de cuenta", "Ya existe una cuenta registrada con este correo usando otro proveedor.", "info");
-      } else {
-        addToast("Error GitHub", "No se pudo completar el acceso con GitHub.", "error");
       }
     } finally {
       setLoadingMethod(null);
@@ -381,7 +359,7 @@ export function LoginPage({ onBypassGuest }: LoginPageProps) {
               </button>
             </div>
 
-            {/* TAB 1: SOCIAL LOGINS (Google, Facebook, GitHub) */}
+            {/* TAB 1: SOCIAL LOGINS (Google, Facebook) */}
             {activeTab === "social" && (
               <div className="space-y-3 pt-1">
                 {/* Google Button */}
@@ -427,25 +405,6 @@ export function LoginPage({ onBypassGuest }: LoginPageProps) {
                     </svg>
                   )}
                   <span>{loadingMethod === "facebook" ? "Conectando Facebook..." : "Continuar con Facebook"}</span>
-                </button>
-
-                {/* GitHub Button */}
-                <button
-                  onClick={handleGithubLogin}
-                  disabled={loadingMethod !== null}
-                  className={`w-full py-3.5 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition-all border border-slate-700 shadow-lg flex items-center justify-center gap-3 cursor-pointer ${
-                    loadingMethod === "github" ? "opacity-70" : ""
-                  }`}
-                >
-                  {loadingMethod === "github" ? (
-                    <svg className="animate-spin w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <Github className="w-4 h-4 shrink-0" />
-                  )}
-                  <span>{loadingMethod === "github" ? "Conectando GitHub..." : "Continuar con GitHub"}</span>
                 </button>
               </div>
             )}
