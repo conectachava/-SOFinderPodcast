@@ -17,11 +17,12 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HelpGuideDrawer } from "@/components/HelpGuideDrawer";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
-import { MiniPlayerBar } from "@/components/MiniPlayerBar";
 import { InactivityModal } from "@/components/InactivityModal";
 import { LoginPage } from "@/components/LoginPage";
+import { SkeletonDashboardLoader } from "@/components/SkeletonDashboardLoader";
 import { AuthRequiredModal } from "@/components/AuthRequiredModal";
 import { SnapshotRestoreModal, ProjectSnapshot } from "@/components/SnapshotRestoreModal";
+import { ProjectExportModal } from "@/components/ProjectExportModal";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { Shield, Sparkles, Activity, RotateCw, ArrowRight } from "lucide-react";
 import { useAuth } from "./AuthProvider";
@@ -45,7 +46,7 @@ function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "id
 }
 
 export default function Home() {
-  const { user, profile: userProfile, loading, ready, retryAuth, forceUnblockLoading } = useAuth();
+  const { user, profile: userProfile, loading, ready, authStatus, retryAuth, forceUnblockLoading, clearAuthCache } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("orchestrator");
 
   const [systemSync, setSystemSync] = useState<boolean>(() => {
@@ -133,11 +134,12 @@ export default function Home() {
   // Modals & Drawers state
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isHelpGuideOpen, setIsHelpGuideOpen] = useState<boolean>(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
   const [showGridOverlay, setShowGridOverlay] = useState<boolean>(false);
   const [isSnapshotRestoreOpen, setIsSnapshotRestoreOpen] = useState<boolean>(false);
-  const [guestBypassed, setGuestBypassed] = useState<boolean>(false);
+  const [guestBypassed, setGuestBypassed] = useState<boolean>(true);
   const [authRequiredOpen, setAuthRequiredOpen] = useState<boolean>(false);
   const [authRequiredFeature, setAuthRequiredFeature] = useState<string>("esta función avanzada");
   const [language, setLanguage] = useState<"es" | "en">("es");
@@ -269,23 +271,7 @@ export default function Home() {
   }, [addToast]);
 
   const handleExportProject = () => {
-    const projectState = {
-      appName: "SourceFinder Pod v2.0",
-      exportedAt: new Date().toISOString(),
-      reportText,
-      rawScript,
-      scriptLines,
-      storyboardData,
-      selectedPreset,
-      history,
-    };
-    const blob = new Blob([JSON.stringify(projectState, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sourcefinder-project-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setIsExportModalOpen(true);
   };
 
   // Keyboard shortcut system (Ctrl+S to save/sync, Ctrl+Enter to advance pipeline)
@@ -398,6 +384,21 @@ export default function Home() {
     setActiveTab("orchestrator");
   };
 
+  if ((authStatus === "checking" || !ready || loading) && !guestBypassed) {
+    return (
+      <SkeletonDashboardLoader
+        onClearCache={async () => {
+          await clearAuthCache();
+          setGuestBypassed(true);
+        }}
+        onForceUnblock={() => {
+          forceUnblockLoading();
+          setGuestBypassed(true);
+        }}
+      />
+    );
+  }
+
   if (!user && !guestBypassed) {
     return (
       <ToastProvider>
@@ -413,20 +414,10 @@ export default function Home() {
         <Header
           activeTab={activeTab}
           setActiveTab={(tab) => {
-            if ((tab === "studio" || tab === "script") && !user) {
-              setAuthRequiredFeature("el Estudio y Consola de Audio");
-              setAuthRequiredOpen(true);
-              return;
-            }
             setActiveTab(tab);
           }}
           onSelectPreset={handleSelectPreset}
           onOpenHistory={() => {
-            if (!user) {
-              setAuthRequiredFeature("el Historial de Podcasts y Sincronización Cloud");
-              setAuthRequiredOpen(true);
-              return;
-            }
             setIsHistoryOpen(true);
           }}
           onOpenProfile={() => setIsProfileOpen(true)}
@@ -443,12 +434,6 @@ export default function Home() {
           syncStatus={syncStatus}
           isFirestoreConnected={isFirestoreConnected}
           onOpenSnapshotRestore={() => setIsSnapshotRestoreOpen(true)}
-        />
-
-        {/* Persistent Mini Player Bar */}
-        <MiniPlayerBar
-          currentTopic={selectedPreset?.topic || "Epílogo: Análisis de Fuentes & Tendencias AI"}
-          onOpenStudio={() => setActiveTab("studio")}
         />
 
         {/* Professional Dashboard Shell Container */}
@@ -575,6 +560,22 @@ export default function Home() {
           onClose={() => setIsHelpGuideOpen(false)}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+        />
+
+        <ProjectExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          projectData={{
+            reportText,
+            rawScript,
+            scriptLines,
+            storyboardData: storyboardData ? (storyboardData.scenes || []) : [],
+            selectedPreset,
+            topic: selectedPreset?.topic || "SourceFinder Podcast Project",
+          }}
+          onExportSuccess={(formats) => {
+            addToast("Exportación Completada", `Formatos exportados: ${formats.join(", ")}`, "success");
+          }}
         />
 
         <AuthRequiredModal

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle } from "lucide-react";
 import { signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, clearFirestoreAuthCache } from "@/lib/firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useAuth, UserProfileWithStatus } from "../app/AuthProvider";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
@@ -216,15 +216,43 @@ export function UserProfileModal({
     } catch (e) {}
   }, [voiceProfiles]);
 
-  const analyticsData = [
-    { day: "Lun", tokens: 45000, exports: 2 },
-    { day: "Mar", tokens: 82000, exports: 5 },
-    { day: "Mié", tokens: 120000, exports: 8 },
-    { day: "Jue", tokens: 95000, exports: 4 },
-    { day: "Vie", tokens: 150000, exports: 10 },
-    { day: "Sáb", tokens: 60000, exports: 3 },
-    { day: "Dom", tokens: 110000, exports: 7 },
-  ];
+  // 30-Day Usage Analytics Dataset
+  const analytics30Days = React.useMemo(() => {
+    const rawTokens = [
+      45, 82, 120, 95, 150, 60, 110, 85, 140, 165, 90, 75, 130, 190, 210, 115,
+      95, 160, 175, 125, 80, 145, 185, 220, 135, 105, 155, 195, 140, 160,
+    ];
+    const rawSessions = [
+      2, 4, 6, 4, 8, 3, 5, 4, 7, 8, 4, 3, 6, 9, 10, 5,
+      4, 7, 8, 6, 3, 7, 9, 11, 6, 5, 7, 9, 6, 8,
+    ];
+    const now = new Date();
+    return rawTokens.map((t, idx) => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (29 - idx));
+      const dateLabel = d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+      const tokens = t * 1000;
+      const sessions = rawSessions[idx];
+      const exports = Math.max(1, Math.round(sessions * 0.7));
+      return {
+        date: dateLabel,
+        tokens,
+        sessions,
+        exports,
+      };
+    });
+  }, []);
+
+  const totalTokens30d = React.useMemo(
+    () => analytics30Days.reduce((acc, curr) => acc + curr.tokens, 0),
+    [analytics30Days]
+  );
+  const totalSessions30d = React.useMemo(
+    () => analytics30Days.reduce((acc, curr) => acc + curr.sessions, 0),
+    [analytics30Days]
+  );
+  const avgTokensPerSession = Math.round(totalTokens30d / (totalSessions30d || 1));
+
   
   const loadPendingUsers = async () => {
     setLoadingUsers(true);
@@ -368,7 +396,7 @@ export function UserProfileModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in">
-      <div className="bg-white max-w-md w-full rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-900 max-w-xl md:max-w-2xl w-full rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-200">
         {/* Header */}
         <div className="bg-slate-900 text-white p-6 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -445,37 +473,159 @@ export function UserProfileModal({
           ) : activeTab === "analytics" ? (
             <div className="space-y-6">
               <div className="space-y-1">
-                <h4 className="font-bold text-slate-900 text-sm">Analíticas del Proyecto</h4>
-                <p className="text-xs text-slate-500">Uso histórico de tokens de generación y exportaciones de audio.</p>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                    Analíticas de Uso (Últimos 30 Días)
+                  </h4>
+                  <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-full text-[10px] font-mono font-bold">
+                    30 Días
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Visualización de consumo de tokens y frecuencia de sesiones de generación de podcasts.
+                </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                  <span className="text-xs font-bold text-slate-700">Tokens de Generación por Día</span>
-                  <div className="h-40 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analyticsData}>
-                        <XAxis dataKey="day" stroke="#888888" fontSize={10} tickLine={false} />
-                        <YAxis stroke="#888888" fontSize={10} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: "#1e293b", borderColor: "#334155", borderRadius: "8px", color: "#fff", fontSize: "11px" }} />
-                        <Bar dataKey="tokens" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+              {/* 30-Day Metric Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl">
+                  <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Tokens Totales
                   </div>
+                  <div className="text-base font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                    {(totalTokens30d / 1000000).toFixed(2)}M
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">30d Acumulado</div>
                 </div>
 
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                  <span className="text-xs font-bold text-slate-700">Exportaciones de Audio (MP3)</span>
-                  <div className="h-40 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analyticsData}>
-                        <XAxis dataKey="day" stroke="#888888" fontSize={10} tickLine={false} />
-                        <YAxis stroke="#888888" fontSize={10} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: "#1e293b", borderColor: "#334155", borderRadius: "8px", color: "#fff", fontSize: "11px" }} />
-                        <Line type="monotone" dataKey="exports" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl">
+                  <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Sesiones Podcast
                   </div>
+                  <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    {totalSessions30d}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">30d Completadas</div>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl">
+                  <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Promedio / Sesión
+                  </div>
+                  <div className="text-base font-extrabold text-slate-900 dark:text-white mt-0.5">
+                    {(avgTokensPerSession / 1000).toFixed(1)}k
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">tokens por podcast</div>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl">
+                  <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Días Activos
+                  </div>
+                  <div className="text-base font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">
+                    30 / 30
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">100% actividad</div>
+                </div>
+              </div>
+
+              {/* Chart 1: 30-Day Token Consumption */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                    Consumo de Tokens de Generación (30 Días)
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Max: 220k tokens/día
+                  </span>
+                </div>
+                <div className="h-44 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics30Days} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <XAxis
+                        dataKey="date"
+                        stroke="#94a3b8"
+                        fontSize={9}
+                        tickLine={false}
+                        interval={3}
+                      />
+                      <YAxis
+                        stroke="#94a3b8"
+                        fontSize={9}
+                        tickLine={false}
+                        tickFormatter={(val) => `${val / 1000}k`}
+                      />
+                      <Tooltip
+                        formatter={(val: any) => [`${Number(val).toLocaleString()} tokens`, "Consumo"]}
+                        labelFormatter={(label) => `Fecha: ${label}`}
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderColor: "#334155",
+                          borderRadius: "8px",
+                          color: "#fff",
+                          fontSize: "11px",
+                        }}
+                      />
+                      <Bar dataKey="tokens" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 2: 30-Day Podcast Generation Sessions Frequency */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    Frecuencia de Sesiones de Generación de Podcasts (30 Días)
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Prom: {(totalSessions30d / 30).toFixed(1)} ses./día
+                  </span>
+                </div>
+                <div className="h-44 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={analytics30Days} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <XAxis
+                        dataKey="date"
+                        stroke="#94a3b8"
+                        fontSize={9}
+                        tickLine={false}
+                        interval={3}
+                      />
+                      <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
+                      <Tooltip
+                        formatter={(val: any) => [`${val} sesiones`, "Frecuencia"]}
+                        labelFormatter={(label) => `Fecha: ${label}`}
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderColor: "#334155",
+                          borderRadius: "8px",
+                          color: "#fff",
+                          fontSize: "11px",
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="sessions"
+                        stroke="#10b981"
+                        strokeWidth={2.5}
+                        dot={{ r: 2.5, fill: "#10b981" }}
+                        activeDot={{ r: 5, stroke: "#34d399", strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Insights Summary Footer */}
+              <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl flex items-center justify-between text-xs text-indigo-950 dark:text-indigo-200">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>
+                    Día de mayor uso: <strong className="font-semibold">Día 24</strong> con 220,000 tokens y 11 sesiones de podcast.
+                  </span>
                 </div>
               </div>
             </div>
@@ -979,10 +1129,23 @@ export function UserProfileModal({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleLogout}
-                    className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 hover:underline"
+                    className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 hover:underline cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     Cerrar Sesión
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm("¿Deseas limpiar la caché local de Firestore y resetear el estado de autenticación?")) {
+                        await clearFirestoreAuthCache();
+                        window.location.reload();
+                      }
+                    }}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+                    title="Limpia la caché de Firestore y resuelve bucles de sesión"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Limpiar Caché Firestore
                   </button>
                   {onClearSession && (
                     <button
@@ -990,7 +1153,7 @@ export function UserProfileModal({
                         onClearSession();
                         onClose();
                       }}
-                      className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 hover:underline"
+                      className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 hover:underline cursor-pointer"
                       title="Wipe current draft state and reset workspace"
                     >
                       🗑️ Limpiar Sesión Activa

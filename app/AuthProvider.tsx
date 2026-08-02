@@ -1,9 +1,19 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp, collection, getDocs, updateDoc } from "firebase/firestore";
+import {
+  onAuthStateChanged,
+  User,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
+} from "firebase/auth";
+import { auth, db, clearFirestoreAuthCache } from "@/lib/firebase";
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { UserProfile } from "../components/UserProfileModal";
+
+export type AuthStatus = "checking" | "authenticated" | "unauthenticated";
 
 export interface UserProfileWithStatus extends UserProfile {
   status: "pending" | "approved" | "rejected";
@@ -14,22 +24,30 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   ready: boolean;
+  authStatus: AuthStatus;
   profile: UserProfileWithStatus | null;
   isAdmin: boolean;
   setProfile: (profile: Partial<UserProfileWithStatus>) => Promise<void>;
+  loginWithGoogle: () => Promise<User | null>;
+  logout: () => Promise<void>;
   retryAuth: () => void;
   forceUnblockLoading: () => void;
+  clearAuthCache: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   ready: false,
+  authStatus: "checking",
   profile: null,
   isAdmin: false,
   setProfile: async () => {},
+  loginWithGoogle: async () => null,
+  logout: async () => {},
   retryAuth: () => {},
   forceUnblockLoading: () => {},
+  clearAuthCache: async () => {},
 });
 
 const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | "isLoggedIn"> = {
@@ -47,8 +65,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return null;
     }
   });
-  const [loading, setLoading] = useState<boolean>(false);
-  const [ready, setReady] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [ready, setReady] = useState<boolean>(false);
+
+  const authStatus: AuthStatus = (!ready || loading) ? "checking" : (user ? "authenticated" : "unauthenticated");
+
   const [profile, setProfileState] = useState<UserProfileWithStatus | null>(() => {
     try {
       const u = auth.currentUser;
@@ -65,6 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (e) {}
     return null;
   });
+
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
       return auth.currentUser?.email === "vsnrylabs@gmail.com";
@@ -102,12 +124,77 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const loginWithGoogle = async (): Promise<User | null> => {
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      let result;
+      try {
+        result = await signInWithPopup(auth, provider);
+      } catch (popupErr: any) {
+        if (
+          popupErr?.code === "auth/popup-blocked" ||
+          popupErr?.code === "auth/cancelled-popup-request"
+        ) {
+          await signInWithRedirect(auth, provider);
+          return null;
+        }
+        throw popupErr;
+      }
+      if (result?.user) {
+        setUser(result.user);
+        return result.user;
+      }
+      return null;
+    } catch (error) {
+      console.error("Google Auth error:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+      setReady(true);
+    }
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    try {
+      await signOut(auth);
+      setUser(null);
+      setProfileState(null);
+      setIsAdmin(false);
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setLoading(false);
+      setReady(true);
+    }
+  };
+
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
+
+    // Fast safety fallback timer so auth loading state never stalls the UI
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+      setReady(true);
+    }, 100);
+
+    // Process redirect result if returning from a Google OAuth redirect flow
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          setUser(result.user);
+        }
+      })
+      .catch((error) => {
+        console.warn("Redirect auth result notice:", error);
+      });
 
     const unsubscribeAuth = onAuthStateChanged(
       auth,
       (currentUser) => {
+        clearTimeout(safetyTimer);
         setUser(currentUser);
         setLoading(false);
         setReady(true);
@@ -194,6 +281,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  const clearAuthCache = async () => {
+    setLoading(true);
+    try {
+      await clearFirestoreAuthCache();
+      setUser(null);
+      setProfileState(null);
+      setIsAdmin(false);
+    } catch (e) {
+      console.warn("clearAuthCache notice:", e);
+    } finally {
+      setLoading(false);
+      setReady(true);
+    }
+  };
+
   const setProfile = async (updates: Partial<UserProfileWithStatus>) => {
     if (user && profile) {
       const userDocRef = doc(db, "users", user.uid);
@@ -207,10 +309,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, ready, profile, isAdmin, setProfile, retryAuth, forceUnblockLoading }}>
+    <AuthContext.Provider value={{ user, loading, ready, authStatus, profile, isAdmin, setProfile, loginWithGoogle, logout, retryAuth, forceUnblockLoading, clearAuthCache }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => useContext(AuthContext);
+

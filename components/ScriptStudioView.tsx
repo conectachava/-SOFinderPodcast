@@ -247,61 +247,16 @@ function ScriptAnalyticsPanel({ lines }: { lines: ScriptLine[] }) {
   );
 }
 
-const ScriptEditor = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
-  const [isFocused, setIsFocused] = useState(false);
-  const backdropRef = React.useRef<HTMLDivElement>(null);
-
-  // Syntax highlighting logic
-  const highlightText = (text: string) => {
-    // Escape HTML to prevent injection
-    const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    
-    // Highlight speakers (e.g., "Paul:", "Sarah:")
-    let highlighted = escaped.replace(/^([a-zA-Z0-9_ -]+):/gm, '<span class="text-pink-600 dark:text-pink-400 font-bold">$1:</span>');
-    
-    // Highlight stage directions / scenes (e.g., [SCENE 1:...], [SFX:...])
-    highlighted = highlighted.replace(/\[([^\]]+)\]/g, '<span class="text-emerald-600 dark:text-emerald-400 font-bold">[$1]</span>');
-    
-    // Highlight headers (e.g., ## Resumen Ejecutivo)
-    highlighted = highlighted.replace(/^(##\s.+)$/gm, '<span class="text-indigo-600 dark:text-indigo-400 font-bold">$1</span>');
-
-    // Add extra newline at the end so trailing newlines are rendered
-    return { __html: highlighted + '\n' };
-  };
-
-  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (backdropRef.current) {
-      backdropRef.current.scrollTop = e.currentTarget.scrollTop;
-      backdropRef.current.scrollLeft = e.currentTarget.scrollLeft;
-    }
-  };
-
+const ScriptEditor = ({ value, onChange }: { value: string; onChange: (val: string) => void }) => {
   return (
-    <div className={`relative w-full border rounded-lg overflow-hidden min-h-[160px] sm:min-h-[220px] ${
-      isFocused 
-        ? "border-slate-900 dark:border-slate-100 ring-2 ring-slate-900 dark:ring-slate-100" 
-        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-    }`}>
-      {/* Backdrop for syntax highlighting */}
-      <div 
-        ref={backdropRef}
-        className="absolute inset-0 pointer-events-none px-3 py-2 font-mono text-[11px] whitespace-pre-wrap break-words text-slate-800 dark:text-slate-100 overflow-hidden"
-        aria-hidden="true"
-        dangerouslySetInnerHTML={highlightText(value)}
-      />
-      
-      {/* Transparent Textarea for actual editing */}
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onScroll={handleScroll}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        className="absolute inset-0 w-full h-full px-3 py-2 bg-transparent text-transparent caret-slate-900 dark:caret-white resize-none focus:outline-none font-mono text-[11px] whitespace-pre-wrap break-words m-0 border-none overflow-auto"
-        placeholder="Pega aquí el informe o resumen de fuentes..."
-        spellCheck={false}
-      />
-    </div>
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={8}
+      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 min-h-[180px] sm:min-h-[220px] resize-y transition-colors"
+      placeholder="Pega aquí el informe de inteligencia o resumen de fuentes..."
+      spellCheck={false}
+    />
   );
 };
 

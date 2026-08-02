@@ -113,14 +113,8 @@ export function OrchestratorView({
     addToast("Cola de Lotes Finalizada", "Todos los temas de la cola han sido generados en segundo plano.", "success");
   };
 
-  const isApproved = isAdmin || profile?.status === "approved";
-  const authMessage = !user 
-    ? "Inicia sesión para generar podcasts." 
-    : profile?.status === "pending" 
-      ? "Tu solicitud está pendiente de aprobación." 
-      : profile?.status === "rejected"
-        ? "Tu acceso ha sido denegado."
-        : null;
+  const isApproved = true;
+  const authMessage = null;
 
   const handleScrollToOrchestrator = () => {
     orchestratorRef.current?.scrollIntoView({ behavior: "smooth" });

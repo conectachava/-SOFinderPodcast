@@ -17,6 +17,7 @@ import {
 import { auth } from "@/lib/firebase";
 import { useToast } from "./Toast";
 import { LandingHero } from "./LandingHero";
+import { useAuth } from "@/app/AuthProvider";
 
 interface LoginPageProps {
   onBypassGuest?: () => void;
@@ -26,6 +27,7 @@ type AuthMode = "social" | "email" | "phone";
 
 export function LoginPage({ onBypassGuest }: LoginPageProps) {
   const { addToast } = useToast();
+  const { loginWithGoogle } = useAuth();
   const [activeTab, setActiveTab] = useState<AuthMode>("social");
   const [loadingMethod, setLoadingMethod] = useState<string | null>(null);
   const [showLandingModal, setShowLandingModal] = useState(false);
@@ -59,15 +61,14 @@ export function LoginPage({ onBypassGuest }: LoginPageProps) {
   const handleGoogleLogin = async () => {
     setLoadingMethod("google");
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await loginWithGoogle();
       addToast("¡Bienvenido!", "Sesión iniciada con éxito mediante Google.", "success");
     } catch (error: any) {
       console.error(error);
-      if (error.code === "auth/popup-closed-by-user") {
+      if (error?.code === "auth/popup-closed-by-user") {
         addToast("Aviso", "Ventana de autenticación cerrada.", "info");
       } else {
-        addToast("Error de Acceso", error.message || "No se pudo iniciar sesión con Google.", "error");
+        addToast("Error de Acceso", error?.message || "No se pudo iniciar sesión con Google.", "error");
       }
     } finally {
       setLoadingMethod(null);
