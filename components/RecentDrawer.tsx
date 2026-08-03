@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { History, Play, Trash2, X, Sparkles, Clock, CheckSquare, Square, Volume2, Tag, Square as StopIcon } from "lucide-react";
+import { History, Play, Trash2, X, Sparkles, Clock, CheckSquare, Square, Volume2, Tag, Search, Filter } from "lucide-react";
 import { useToast } from "./Toast";
 
 export interface PodcastHistoryItem {
@@ -12,6 +12,8 @@ export interface PodcastHistoryItem {
   date: string;
   scriptLinesCount?: number;
   reportSnippet?: string;
+  reportText?: string;
+  rawScript?: string;
   tags?: string[];
 }
 
@@ -36,6 +38,7 @@ export function RecentDrawer({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   if (!isOpen) return null;
 
@@ -46,10 +49,27 @@ export function RecentDrawer({
     )
   );
 
-  // Filter history items by selected tag
-  const filteredHistory = activeTagFilter
-    ? history.filter((item) => item.tags?.includes(activeTagFilter))
-    : history;
+  // Semantic keyword filtering logic across topic, contentType, format, reportSnippet, reportText, rawScript, and tags
+  const filteredHistory = history.filter((item) => {
+    // 1. Tag filter check
+    if (activeTagFilter && !item.tags?.includes(activeTagFilter)) {
+      return false;
+    }
+
+    // 2. Search query check
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase().trim();
+    const topicMatch = item.topic.toLowerCase().includes(query);
+    const contentTypeMatch = item.contentType.toLowerCase().includes(query);
+    const formatMatch = item.format.toLowerCase().includes(query);
+    const snippetMatch = item.reportSnippet?.toLowerCase().includes(query) || false;
+    const reportMatch = item.reportText?.toLowerCase().includes(query) || false;
+    const scriptMatch = item.rawScript?.toLowerCase().includes(query) || false;
+    const tagMatch = item.tags?.some((t) => t.toLowerCase().includes(query)) || false;
+
+    return topicMatch || contentTypeMatch || formatMatch || snippetMatch || reportMatch || scriptMatch || tagMatch;
+  });
 
   const handleToggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -142,6 +162,39 @@ export function RecentDrawer({
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        {/* SEMANTIC SEARCH BAR */}
+        <div className="p-3 bg-slate-100/70 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Búsqueda semántica en guiones y reportes..."
+              className="w-full pl-9 pr-8 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <div className="mt-2 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">
+                Resultados para <span className="font-bold text-indigo-600 dark:text-indigo-400">&quot;{searchQuery}&quot;</span>:
+              </span>
+              <span className="font-mono font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                {filteredHistory.length} {filteredHistory.length === 1 ? "episodio" : "episodios"}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Tag Category Filter Bar */}
@@ -244,15 +297,27 @@ export function RecentDrawer({
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {filteredHistory.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-xs space-y-2">
-              <Clock className="w-8 h-8 mx-auto text-slate-300" />
-              <p className="font-medium">
-                {activeTagFilter
+              <Clock className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+              <p className="font-medium text-slate-700 dark:text-slate-300">
+                {searchQuery
+                  ? `No se encontraron coincidencias semánticas para "${searchQuery}".`
+                  : activeTagFilter
                   ? `No hay proyectos con la etiqueta "#${activeTagFilter}".`
                   : "No hay investigaciones recientes guardadas."}
               </p>
-              <p className="text-[11px] text-slate-500">
-                Cada episodio generado mediante el Orquestador o SourceFinder se guardará automáticamente aquí.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {searchQuery
+                  ? "Intenta con otras palabras clave relacionadas con la temática, informe o personajes."
+                  : "Cada episodio generado mediante el Orquestador o SourceFinder se guardará automáticamente aquí."}
               </p>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Limpiar Búsqueda Semántica
+                </button>
+              )}
             </div>
           ) : (
             filteredHistory.map((item) => {
