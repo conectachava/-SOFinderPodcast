@@ -6,9 +6,10 @@ import { useAuth } from "../app/AuthProvider";
 
 interface LandingHeroProps {
   onStartNow: () => void;
+  onOpenLogin?: () => void;
 }
 
-export function LandingHero({ onStartNow }: LandingHeroProps) {
+export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"pain" | "calculator" | "comparison" | "pricing">("pain");
 
@@ -634,13 +635,23 @@ export function LandingHero({ onStartNow }: LandingHeroProps) {
             </div>
           </div>
 
-          <button
-            onClick={onStartNow}
-            className="px-8 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-lg hover:shadow-amber-500/20 flex items-center gap-2 cursor-pointer shrink-0"
-          >
-            <span>Lanzar mi Podcast Ahora</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            {onOpenLogin && (
+              <button
+                onClick={onOpenLogin}
+                className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                <span>🔑 Iniciar Sesión</span>
+              </button>
+            )}
+            <button
+              onClick={onStartNow}
+              className="px-8 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-lg hover:shadow-amber-500/20 flex items-center gap-2 cursor-pointer shrink-0"
+            >
+              <span>Lanzar mi Podcast Ahora</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
