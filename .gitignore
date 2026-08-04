@@ -1,4 +1,7 @@
 node_modules/
+.next/
+dist/
+.aistudio/
 coverage/
 .DS_Store
 *.log
@@ -8,3 +11,5 @@ coverage/
 *.tsbuildinfo
 bun.lock
 firebase-applet-config
+*.pyc
+__pycache__/

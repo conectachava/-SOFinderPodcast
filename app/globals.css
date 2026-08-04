@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@source "../app";
+@source "../components";
+@source "../hooks";
+@source "../lib";
 
 /* Smooth cross-fade transition for light / dark mode theme switching */
 :root {

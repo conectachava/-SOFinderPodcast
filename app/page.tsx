@@ -9,6 +9,8 @@ import { PodcastStudioView } from "@/components/PodcastStudioView";
 import { StoryboardView } from "@/components/StoryboardView";
 import type { StoryboardData } from "@/app/api/storyboard/route";
 import { DocsView } from "@/components/DocsView";
+import { LandingHero } from "@/components/LandingHero";
+import { LandingHeader } from "@/components/LandingHeader";
 import { ToastProvider } from "@/components/Toast";
 import { PipelineProgress } from "@/components/PipelineProgress";
 import { RecentDrawer, PodcastHistoryItem } from "@/components/RecentDrawer";
@@ -47,7 +49,7 @@ function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "id
 
 export default function Home() {
   const { user, profile: userProfile, loading, ready, authStatus, retryAuth, forceUnblockLoading, clearAuthCache } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>("orchestrator");
+  const [activeTab, setActiveTab] = useState<TabType>("landing");
 
   const [systemSync, setSystemSync] = useState<boolean>(() => {
     try {
@@ -411,88 +413,109 @@ export default function Home() {
     <ToastProvider>
       <AutosaveNotifier syncStatus={syncStatus} />
       <div className="min-h-screen flex flex-col bg-slate-100/80 dark:bg-slate-950 transition-colors duration-200">
-        <Header
-          activeTab={activeTab}
-          setActiveTab={(tab) => {
-            setActiveTab(tab);
-          }}
-          onSelectPreset={handleSelectPreset}
-          onOpenHistory={() => {
-            setIsHistoryOpen(true);
-          }}
-          onOpenProfile={() => setIsProfileOpen(true)}
-          onOpenTutorial={() => setIsTutorialOpen(true)}
-          onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
-          onOpenShortcuts={() => setIsShortcutsOpen(true)}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          language={language}
-          onToggleLanguage={() => setLanguage((l) => (l === "es" ? "en" : "es"))}
-          history={history}
-          onSelectHistoryItem={handleReRunTopicFromHistory}
-          onExportProject={handleExportProject}
-          syncStatus={syncStatus}
-          isFirestoreConnected={isFirestoreConnected}
-          onOpenSnapshotRestore={() => setIsSnapshotRestoreOpen(true)}
-        />
+        {activeTab === "landing" ? (
+          <LandingHeader
+            onLaunchStudio={() => setActiveTab("orchestrator")}
+            onOpenLogin={() => setIsProfileOpen(true)}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            language={language}
+            onToggleLanguage={() => setLanguage((l) => (l === "es" ? "en" : "es"))}
+            user={user}
+          />
+        ) : (
+          <Header
+            activeTab={activeTab}
+            setActiveTab={(tab) => {
+              setActiveTab(tab);
+            }}
+            onSelectPreset={handleSelectPreset}
+            onOpenHistory={() => {
+              setIsHistoryOpen(true);
+            }}
+            onOpenProfile={() => setIsProfileOpen(true)}
+            onOpenTutorial={() => setIsTutorialOpen(true)}
+            onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
+            onOpenShortcuts={() => setIsShortcutsOpen(true)}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            language={language}
+            onToggleLanguage={() => setLanguage((l) => (l === "es" ? "en" : "es"))}
+            history={history}
+            onSelectHistoryItem={handleReRunTopicFromHistory}
+            onExportProject={handleExportProject}
+            syncStatus={syncStatus}
+            isFirestoreConnected={isFirestoreConnected}
+            onOpenSnapshotRestore={() => setIsSnapshotRestoreOpen(true)}
+          />
+        )}
 
         {/* Professional Dashboard Shell Container */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
-          {/* Progress Indicator for Pipeline Flow */}
-          <aside aria-label="Pipeline Progress">
-            <PipelineProgress
-              activeTab={activeTab}
-              hasReport={!!reportText}
-              hasScript={scriptLines.length > 0} 
-              setActiveTab={setActiveTab}
+          {activeTab === "landing" ? (
+            <LandingHero
+              onStartNow={() => setActiveTab("orchestrator")}
+              onOpenLogin={() => setIsProfileOpen(true)}
             />
-          </aside>
-
-          <ErrorBoundary>
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] border border-slate-200/90 dark:border-slate-800 overflow-hidden min-h-[720px] flex flex-col relative transition-colors duration-200">
-              {activeTab === "orchestrator" && (
-                <OrchestratorView
-                  onSaveToHistory={saveHistoryItem}
-                  onUpdatePipelineData={(data) => {
-                    if (data.reportText) setReportText(data.reportText);
-                    if (data.rawScript) setRawScript(data.rawScript);
-                    if (data.scriptLines) setScriptLines(data.scriptLines);
-                    if (data.storyboardData) setStoryboardData(data.storyboardData);
-                  }}
-                  presetTopic={selectedPreset?.topic}
-                  presetContentType={selectedPreset?.contentType}
-                  presetFormat={selectedPreset?.format}
+          ) : (
+            <>
+              {/* Progress Indicator for Pipeline Flow */}
+              <aside aria-label="Pipeline Progress">
+                <PipelineProgress
+                  activeTab={activeTab}
+                  hasReport={!!reportText}
+                  hasScript={scriptLines.length > 0} 
+                  setActiveTab={setActiveTab}
                 />
-              )}
+              </aside>
 
-              {activeTab === "sourcefinder" && (
-                <SourceFinderView
-                  onUseReportForScript={handleSourceFinderComplete}
-                />
-              )}
+              <ErrorBoundary>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] border border-slate-200/90 dark:border-slate-800 overflow-hidden min-h-[720px] flex flex-col relative transition-colors duration-200">
+                  {activeTab === "orchestrator" && (
+                    <OrchestratorView
+                      onSaveToHistory={saveHistoryItem}
+                      onUpdatePipelineData={(data) => {
+                        if (data.reportText) setReportText(data.reportText);
+                        if (data.rawScript) setRawScript(data.rawScript);
+                        if (data.scriptLines) setScriptLines(data.scriptLines);
+                        if (data.storyboardData) setStoryboardData(data.storyboardData);
+                      }}
+                      presetTopic={selectedPreset?.topic}
+                      presetContentType={selectedPreset?.contentType}
+                      presetFormat={selectedPreset?.format}
+                    />
+                  )}
 
-              {activeTab === "script" && (
-                <ScriptStudioView
-                  initialReport={reportText}
-                  onSendToStudio={handleScriptStudioComplete}
-                />
-              )}
+                  {activeTab === "sourcefinder" && (
+                    <SourceFinderView
+                      onUseReportForScript={handleSourceFinderComplete}
+                    />
+                  )}
 
-              {activeTab === "studio" && (
-                <PodcastStudioView
-                  scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
-                  rawScript={rawScript}
-                  topic={selectedPreset?.topic}
-                />
-              )}
+                  {activeTab === "script" && (
+                    <ScriptStudioView
+                      initialReport={reportText}
+                      onSendToStudio={handleScriptStudioComplete}
+                    />
+                  )}
 
-              {activeTab === "storyboard" && (
-                <StoryboardView storyboardData={storyboardData} />
-              )}
+                  {activeTab === "studio" && (
+                    <PodcastStudioView
+                      scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
+                      rawScript={rawScript}
+                      topic={selectedPreset?.topic}
+                    />
+                  )}
 
-              {activeTab === "docs" && <DocsView />}
-            </div>
-          </ErrorBoundary>
+                  {activeTab === "storyboard" && (
+                    <StoryboardView storyboardData={storyboardData} />
+                  )}
+
+                  {activeTab === "docs" && <DocsView />}
+                </div>
+              </ErrorBoundary>
+            </>
+          )}
         </main>
 
         {/* Drawers & Modals */}

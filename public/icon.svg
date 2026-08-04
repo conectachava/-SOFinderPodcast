@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="url(#accentGrad)" stroke-width="4" stroke-opacity="0.4"/>
+  <path d="M 112 256 A 144 144 0 0 1 400 256" fill="none" stroke="url(#cyanGrad)" stroke-width="14" stroke-linecap="round" opacity="0.4" />
+  <path d="M 152 256 A 104 104 0 0 1 360 256" fill="none" stroke="url(#accentGrad)" stroke-width="16" stroke-linecap="round" opacity="0.7" />
+  <path d="M 192 256 A 64 64 0 0 1 320 256" fill="none" stroke="url(#cyanGrad)" stroke-width="18" stroke-linecap="round" />
+  <rect x="224" y="160" width="64" height="120" rx="32" fill="url(#accentGrad)"/>
+  <path d="M 200 240 A 56 56 0 0 0 312 240" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+  <line x1="256" y1="296" x2="256" y2="360" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+  <line x1="208" y1="360" x2="304" y2="360" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+  <polygon points="256,96 268,128 300,140 268,152 256,184 244,152 212,140 244,128" fill="#fbbf24"/>
+</svg>

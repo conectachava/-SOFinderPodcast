@@ -2,11 +2,11 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database } from "lucide-react";
+import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database, Sparkles, Home } from "lucide-react";
 import { UserProfile } from "./UserProfileModal";
 import { useAuth } from "../app/AuthProvider";
 
-export type TabType = "orchestrator" | "sourcefinder" | "script" | "studio" | "storyboard" | "docs";
+export type TabType = "landing" | "orchestrator" | "sourcefinder" | "script" | "studio" | "storyboard" | "docs";
 
 interface HeaderProps {
   activeTab: TabType;
@@ -85,16 +85,16 @@ export function Header({
         <div className="flex flex-col md:flex-row md:items-center justify-between py-3 gap-3">
           {/* Brand Logo & Tagline */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded flex items-center justify-center font-bold text-sm shadow-xs">
-              SF
+            <div className="w-8 h-8 bg-[#1a73e8] text-white rounded flex items-center justify-center font-bold text-sm shadow-xs">
+              <Radio className="w-4 h-4 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">
-                  SourceFinder Pod <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">v2.0 Orchestrator</span>
+                <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                  SourceFinder Pod <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">v2.5 Orchestrator</span>
                 </h1>
-                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-mono font-bold">
-                  GEMINI_API Active
+                <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950 text-[#1a73e8] dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded text-[10px] font-mono font-bold">
+                  Google Cloud Gemini
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -335,10 +335,22 @@ export function Header({
         {/* Navigation Tabs Bar */}
         <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-2 border-t border-slate-100 dark:border-slate-800 pt-2 text-xs">
           <button
+            onClick={() => setActiveTab("landing")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
+              activeTab === "landing"
+                ? "bg-[#1a73e8] text-white font-bold shadow-xs"
+                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            Inicio (Landing)
+          </button>
+
+          <button
             onClick={() => setActiveTab("orchestrator")}
             className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
               activeTab === "orchestrator"
-                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
@@ -350,7 +362,7 @@ export function Header({
             onClick={() => setActiveTab("sourcefinder")}
             className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
               activeTab === "sourcefinder"
-                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
@@ -362,7 +374,7 @@ export function Header({
             onClick={() => setActiveTab("script")}
             className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
               activeTab === "script"
-                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
@@ -374,7 +386,7 @@ export function Header({
             onClick={() => setActiveTab("studio")}
             className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
               activeTab === "studio"
-                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
@@ -386,11 +398,11 @@ export function Header({
             onClick={() => setActiveTab("storyboard")}
             className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
               activeTab === "storyboard"
-                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
-            <Radio className="w-3.5 h-3.5 text-pink-500" />
+            <Radio className="w-3.5 h-3.5 text-amber-300" />
             Storyboard Video (Flow)
           </button>
 
@@ -398,7 +410,7 @@ export function Header({
             onClick={() => setActiveTab("docs")}
             className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
               activeTab === "docs"
-                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
