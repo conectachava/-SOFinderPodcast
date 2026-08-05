@@ -138,15 +138,11 @@ const jsonLdSchema = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="es" className="scroll-smooth">
-      <head>
-        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
+      <body suppressHydrationWarning className="antialiased selection:bg-indigo-500 selection:text-white">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSchema) }}
         />
-      </head>
-      <body suppressHydrationWarning className="antialiased selection:bg-indigo-500 selection:text-white">
         <AuthProvider>
           <ToastProvider>
             {children}
