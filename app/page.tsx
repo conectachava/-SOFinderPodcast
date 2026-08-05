@@ -147,16 +147,17 @@ export default function Home() {
   const [language, setLanguage] = useState<"es" | "en">("es");
   // Focus Mode state for ScriptStudioView
   const [isFocusModeActive, setIsFocusModeActive] = useState<boolean>(false);
-  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
+
+  useEffect(() => {
     try {
       const onboarded = localStorage.getItem("sf_onboarded");
       if (!onboarded) {
         localStorage.setItem("sf_onboarded", "true");
-        return true;
+        setIsTutorialOpen(true);
       }
     } catch (e) {}
-    return false;
-  });
+  }, []);
 
   // Local history state
   const [history, setHistory] = useState<PodcastHistoryItem[]>([]);
@@ -405,14 +406,12 @@ export default function Home() {
 
   if (!user && !guestBypassed) {
     return (
-      <ToastProvider>
-        <LoginPage onBypassGuest={() => setGuestBypassed(true)} />
-      </ToastProvider>
+      <LoginPage onBypassGuest={() => setGuestBypassed(true)} />
     );
   }
 
   return (
-    <ToastProvider>
+    <>
       <AutosaveNotifier syncStatus={syncStatus} />
       <div className="min-h-screen flex flex-col bg-slate-100/80 dark:bg-slate-950 transition-colors duration-200">
         {activeTab === "landing" ? (
@@ -625,6 +624,6 @@ export default function Home() {
           <p className="text-[10px] font-mono opacity-60">v0.1.0</p>
         </footer>
       </div>
-    </ToastProvider>
+    </>
   );
 }

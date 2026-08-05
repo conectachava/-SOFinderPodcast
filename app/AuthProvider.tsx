@@ -58,42 +58,15 @@ const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | 
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      return auth.currentUser;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [ready, setReady] = useState<boolean>(false);
 
   const authStatus: AuthStatus = (!ready || loading) ? "checking" : (user ? "authenticated" : "unauthenticated");
 
-  const [profile, setProfileState] = useState<UserProfileWithStatus | null>(() => {
-    try {
-      const u = auth.currentUser;
-      if (u) {
-        return {
-          ...defaultProfile,
-          name: u.isAnonymous ? "Invitado" : u.displayName || u.email?.split("@")[0] || "Usuario",
-          email: u.email || "",
-          isLoggedIn: true,
-          status: "approved",
-          uid: u.uid,
-        };
-      }
-    } catch (e) {}
-    return null;
-  });
+  const [profile, setProfileState] = useState<UserProfileWithStatus | null>(null);
 
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    try {
-      return auth.currentUser?.email === "vsnrylabs@gmail.com";
-    } catch (e) {
-      return false;
-    }
-  });
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   const forceUnblockLoading = () => {
     setLoading(false);

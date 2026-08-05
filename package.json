@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build && mkdir -p dist && cp -r .next/. dist/",
+    "build": "NODE_ENV=production next build",
     "start": "node server.js",
     "lint": "eslint .",
     "clean": "next clean"
