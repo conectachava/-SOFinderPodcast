@@ -1,0 +1,80 @@
+# Manual de Operaciones y Guía de Usuario - SourceFinder Pod v0.1.0
+
+## 1. Visión General de la Aplicación
+**SourceFinder Pod** es una plataforma integral de inteligencia automatizada y generación de podcasts convocada por **Conecta Chava** y **VSNRY LABS**. Permite investigar tendencias globales en tiempo real mediante búsquedas verificadas con Google Search Grounding, calificar la reputación de las fuentes, construir guiones radiofónicos dinámicos con múltiples locutores/callers y sintetizar voz multilocutor mediante Gemini TTS.
+
+---
+
+## 2. Requisitos y Configuración de Entorno
+
+### Requisitos Previos
+- Node.js versión 18+ o superior.
+- Clave de API de Gemini (`GEMINI_API_KEY`).
+- Proyecto de Firebase provisionado para Firestore y Autenticación.
+
+### Variables de Entorno (`.env.example`)
+Asegúrate de contar con el archivo `.env` configurado en la raíz del proyecto:
+```env
+GEMINI_API_KEY=[TU_CLAVE_GEMINI_API]
+NEXT_PUBLIC_FIREBASE_API_KEY=[TU_FIREBASE_API_KEY]
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=[TU_PROYECTO.firebaseapp.com]
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=[TU_PROYECTO_ID]
+```
+
+---
+
+## 3. Comandos de Ejecución y Despliegue
+
+```bash
+# Instalación de dependencias
+npm install
+
+# Modo de Desarrollo
+npm run dev
+
+# Verificación de Código y Linter
+npm run lint
+
+# Compilación para Producción
+npm run build
+
+# Iniciar Servidor de Producción
+npm run start
+```
+
+---
+
+## 4. Estructura de Navegación e Interfaz
+
+La aplicación se organiza en una arquitectura modular de pestañas e instrumentos interactivos:
+
+1. **Landing (Inicio):** Presentación ejecutiva del sistema con llamada a la acción para iniciar el estudio.
+2. **Orchestration (Orquestador):** Control central para ejecutar todo el flujo en un solo clic (Investigación -> Guion -> Storyboard).
+3. **SourceFinder (Investigación):** Búsqueda de noticias de última hora o análisis de tendencias generales ("TENDENCIAS"). Permite ajustar umbrales de confianza (0.0 - 1.0) y clasificar fuentes verificadas vs. rechazadas.
+4. **Script Studio (Estudio de Guion):** Editor de guiones en tiempo real.
+   - **Smart Refine:** Botón de pulido con IA que corrige gramática y fluidez conversacional.
+   - **Focus Mode:** Modo de lectura inmersiva sin distracciones.
+5. **Podcast Studio (Estudio de Voz):** Reproductor de audio multilocutor con etiquetas de sentimiento (Entusiasta, Neutro, Preocupado), barras de estado de voz y generación con Gemini TTS.
+6. **Storyboard (Visuales Flow):** Vista gráfica con desglose de escenas de video de 5-15 segundos, prompts hiperrealistas para locutores y sugerencias de planos B-Roll.
+7. **Documentación (Docs):** Visor integrado de la arquitectura y guías del sistema.
+
+---
+
+## 5. Módulos Adicionales y Herramientas
+
+- **Autoguardado en Firestore:** Sincronización automática cada 3 segundos de los borradores y líneas de guion cuando el usuario inicia sesión.
+- **Modo Temático Flexible:** Soporta tema claro, oscuro, sincronización con preferencia del sistema y programación por horario.
+- **Exportación de Proyecto:** Descarga de informes, guiones y storyboards en formato JSON, Markdown y TXT.
+- **Historial Reciente:** Cajón de proyectos anteriores guardados en Firestore para recargar sesiones previas.
+- **Atajos de Teclado:**
+  - `Ctrl + S` / `Cmd + S`: Sincronización manual en Cloud.
+  - `Ctrl + Enter` / `Cmd + Enter`: Avanzar a la siguiente fase del pipeline.
+
+---
+
+## 6. Solución de Problemas Frecuentes
+
+1. **"GEMINI_API_KEY environment variable is not set":**
+   - Asegúrate de definir `GEMINI_API_KEY` en tu entorno o panel de configuración. En ausencia de la clave, el sistema activará automáticamente los motores de reserva offline (*fallbacks*).
+2. **Desconexión con Firestore:**
+   - La aplicación detecta automáticamente la pérdida de conectividad a Internet y conmuta a la memoria caché local sin perder el progreso del usuario. Se enviará un aviso emergente (*Toast*) cuando se restablezca la conexión.

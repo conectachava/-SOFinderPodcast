@@ -1,0 +1,50 @@
+{
+  "appName": "SourceFinder Pod",
+  "version": "0.1.0",
+  "description": "Automated Intelligence Gathering & Multi-Voice Podcast Generation Platform powered by Gemini AI.",
+  "authors": [
+    "Conecta Chava",
+    "VSNRY LABS"
+  ],
+  "license": "Private / Proprietary",
+  "architecture": "Next.js App Router Full-Stack Application",
+  "keyDependencies": {
+    "framework": "Next.js 16.2.12 (App Router)",
+    "aiSDK": "@google/genai ^2.4.0",
+    "databaseAndAuth": "Firebase 12.16.0 / Firebase Admin 14.2.0",
+    "uiComponents": "React 19.2.8, Lucide React 0.553.0, Motion 12.23.24",
+    "styling": "Tailwind CSS 4.1.11 with PostCSS"
+  },
+  "modules": [
+    {
+      "name": "Orchestrator Pipeline",
+      "path": "/app/api/orchestrator/route.ts",
+      "description": "End-to-end multi-agent orchestration connecting intelligence research, script generation, and storyboard creation."
+    },
+    {
+      "name": "SourceFinder Intelligence Agent",
+      "path": "/app/api/source-finder/route.ts",
+      "description": "Real-time trend analysis and grounding research agent with automated domain reputation scoring."
+    },
+    {
+      "name": "ScriptWriter Agent",
+      "path": "/app/api/script-writer/route.ts",
+      "description": "Multi-speaker radio/podcast script generation with host/caller roles, sentiment detection, and timestamps."
+    },
+    {
+      "name": "Smart Refine Module",
+      "path": "/app/api/script-refine/route.ts",
+      "description": "AI-powered script proofreading, grammar correction, and pacing polish."
+    },
+    {
+      "name": "Gemini TTS Audio Synthesis",
+      "path": "/app/api/tts/route.ts",
+      "description": "Native multi-speaker text-to-speech audio rendering via gemini-3.1-flash-tts-preview."
+    },
+    {
+      "name": "Storyboard Generator",
+      "path": "/app/api/storyboard/route.ts",
+      "description": "Visual scene breakdown and character visual prompt generation for video generation platforms."
+    }
+  ]
+}

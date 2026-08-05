@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User, Sparkles, BarChart3, ChevronDown, ChevronUp, Quote, BookOpen, Link2, Plus, ExternalLink, X, Bookmark, ChevronRight } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User, Sparkles, BarChart3, ChevronDown, ChevronUp, Quote, BookOpen, Link2, Plus, ExternalLink, X, Bookmark, ChevronRight, Maximize2, Minimize2, Eye, Search, SlidersHorizontal, Type } from "lucide-react";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
@@ -263,11 +263,49 @@ const ScriptEditor = ({ value, onChange }: { value: string; onChange: (val: stri
 export function ScriptStudioView({
   initialReport,
   onSendToStudio,
+  onToggleFocusMode,
 }: {
   initialReport?: string;
   onSendToStudio?: (script: string, lines: ScriptLine[]) => void;
+  onToggleFocusMode?: (isFocused: boolean) => void;
 }) {
   const { addToast } = useToast();
+
+  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+  const [focusFontSize, setFocusFontSize] = useState<"sm" | "base" | "lg">("base");
+  const [focusSpeakerFilter, setFocusSpeakerFilter] = useState<string>("all");
+  const [focusSearchTerm, setFocusSearchTerm] = useState<string>("");
+  const [bookmarkedLineIds, setBookmarkedLineIds] = useState<Set<string>>(new Set());
+  const [focusedLineIndex, setFocusedLineIndex] = useState<number>(0);
+  const [onlyBookmarksFilter, setOnlyBookmarksFilter] = useState<boolean>(false);
+
+  const focusSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const toggleFocusMode = useCallback((val: boolean) => {
+    setIsFocusMode(val);
+    if (onToggleFocusMode) {
+      onToggleFocusMode(val);
+    }
+    if (val) {
+      addToast("Modo Lectura Activado", "Atajos disponibles: Esc (Salir), Ctrl+B (Marcar), ↑/↓ (Navegar)", "info");
+    } else {
+      addToast("Modo Lectura Desactivado", "Restaurada la vista de trabajo estándar.", "info");
+    }
+  }, [onToggleFocusMode, addToast]);
+
+  const toggleBookmark = useCallback((id: string) => {
+    setBookmarkedLineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        addToast("Marcador removido", "Línea desmarcada del guion.", "info");
+      } else {
+        next.add(id);
+        addToast("Sección marcada (Ctrl+B)", "Guardado en secciones importantes.", "success");
+      }
+      return next;
+    });
+  }, [addToast]);
 
   const [reportText, setReportText] = useState(
     initialReport ||
@@ -277,18 +315,108 @@ export function ScriptStudioView({
   const [showFormat, setShowFormat] = useState<"Debate" | "Análisis" | "Opinión">("Debate");
   const [durationMinutes, setDurationMinutes] = useState(3);
   const [hostName, setHostName] = useState("Paul");
+  const [hostVoiceProfile, setHostVoiceProfile] = useState("Zephyr");
   const [callers, setCallers] = useState([
-    { name: "Sarah", gender: "Female", accent: "American Midwest" },
-    { name: "David", gender: "Male", accent: "British" },
+    { name: "Sarah", gender: "Female", accent: "American Midwest", voiceProfile: "Kore" },
+    { name: "David", gender: "Male", accent: "British", voiceProfile: "Charon" },
   ]);
 
   const [loading, setLoading] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [rawScript, setRawScript] = useState<string | null>(null);
   const [parsedLines, setParsedLines] = useState<ScriptLine[]>([]);
+  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<{ wordCount: number; estimatedDuration: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [collabMode, setCollabMode] = useState<boolean>(true);
+
+  // AI Voice Profiles Catalog
+  const AI_VOICE_PROFILES = [
+    { id: "Zephyr", name: "Zephyr (Deep Professional Male)", gender: "Male", accent: "British" },
+    { id: "Puck", name: "Puck (Energetic Tech Host Male)", gender: "Male", accent: "American" },
+    { id: "Kore", name: "Kore (Warm News Presenter Female)", gender: "Female", accent: "American" },
+    { id: "Charon", name: "Charon (Narrator / Researcher Male)", gender: "Male", accent: "British" },
+    { id: "Fenrir", name: "Fenrir (Deep Voice Male)", gender: "Male", accent: "Global" },
+    { id: "Aoede", name: "Aoede (Expressive Female)", gender: "Female", accent: "American Midwest" },
+    { id: "Alnilam", name: "Alnilam (Calm Male)", gender: "Male", accent: "Canadian" },
+    { id: "Orion", name: "Orion (Natural American Male)", gender: "Male", accent: "American West" },
+  ];
+
+  // Smart Refine Script (Gemini) Handler
+  const handleSmartRefineScript = async () => {
+    if (!rawScript && parsedLines.length === 0) {
+      addToast("Sin Guion", "No hay guion disponible para refinación inteligente.", "error");
+      return;
+    }
+    setIsRefining(true);
+    addToast("Smart Refine (Gemini)", "Detectando y corrigiendo errores gramaticales e inconsistencias...", "info");
+    try {
+      const res = await fetch("/api/script-refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawScript, lines: parsedLines }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Falló la refinación del guion");
+      }
+      const data = await res.json();
+      setRawScript(data.rawScript);
+      setParsedLines(data.lines || []);
+      addToast(
+        "Smart Refine Completado",
+        `Se aplicaron ${data.refinementsCount} correcciones: ${data.summary}`,
+        "success"
+      );
+    } catch (err: any) {
+      addToast("Error Smart Refine", err.message || "Error al refinarse", "error");
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  // Bulk Edit Actions for Multiple Script Lines
+  const toggleSelectLine = (id: string) => {
+    setSelectedLineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllLines = () => {
+    if (selectedLineIds.size === parsedLines.length) {
+      setSelectedLineIds(new Set());
+    } else {
+      setSelectedLineIds(new Set(parsedLines.map((l) => l.id)));
+    }
+  };
+
+  const handleBulkChangeRole = (newRole: "host" | "caller") => {
+    if (selectedLineIds.size === 0) return;
+    setParsedLines((prev) =>
+      prev.map((l) => (selectedLineIds.has(l.id) ? { ...l, speakerRole: newRole } : l))
+    );
+    addToast("Edición Masiva", `Rol actualizado a "${newRole}" en ${selectedLineIds.size} líneas.`, "success");
+  };
+
+  const handleBulkChangeSpeaker = (newName: string) => {
+    if (selectedLineIds.size === 0 || !newName.trim()) return;
+    setParsedLines((prev) =>
+      prev.map((l) => (selectedLineIds.has(l.id) ? { ...l, speaker: newName } : l))
+    );
+    addToast("Edición Masiva", `Locutor actualizado a "${newName}" en ${selectedLineIds.size} líneas.`, "success");
+  };
+
+  const handleBulkChangeSentiment = (newSentiment: "neutral" | "enthusiastic" | "concerned") => {
+    if (selectedLineIds.size === 0) return;
+    setParsedLines((prev) =>
+      prev.map((l) => (selectedLineIds.has(l.id) ? { ...l, sentiment: newSentiment } : l))
+    );
+    addToast("Edición Masiva", `Tono emocional actualizado a "${newSentiment}" en ${selectedLineIds.size} líneas.`, "success");
+  };
 
   // Cite Source Floating Modal & Parsing State
   const [isCiteModalOpen, setIsCiteModalOpen] = useState(false);
@@ -555,18 +683,388 @@ export function ScriptStudioView({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Filtered lines for Focus Mode reader
+  const focusFilteredLines = React.useMemo(() => {
+    return parsedLines.filter((l) => {
+      const matchSpeaker = focusSpeakerFilter === "all" || l.speaker === focusSpeakerFilter;
+      const matchSearch = !focusSearchTerm || l.text.toLowerCase().includes(focusSearchTerm.toLowerCase()) || l.speaker.toLowerCase().includes(focusSearchTerm.toLowerCase());
+      const matchBookmark = !onlyBookmarksFilter || bookmarkedLineIds.has(l.id);
+      return matchSpeaker && matchSearch && matchBookmark;
+    });
+  }, [parsedLines, focusSpeakerFilter, focusSearchTerm, onlyBookmarksFilter, bookmarkedLineIds]);
+
+  // Keyboard Shortcuts for Focus Mode (Modo Lectura)
+  useEffect(() => {
+    if (!isFocusMode) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isTyping =
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA" ||
+        document.activeElement?.tagName === "SELECT";
+
+      // 1. ESC -> Salir del modo lectura
+      if (e.key === "Escape") {
+        e.preventDefault();
+        toggleFocusMode(false);
+        return;
+      }
+
+      // 2. Ctrl+B or Cmd+B -> Marcar / Desmarcar línea seleccionada
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        if (focusFilteredLines.length > 0) {
+          const targetLine = focusFilteredLines[focusedLineIndex] || focusFilteredLines[0];
+          if (targetLine) {
+            toggleBookmark(targetLine.id);
+          }
+        } else {
+          addToast("Marcador (Ctrl+B)", "Selecciona o genera un guion para marcar líneas.", "info");
+        }
+        return;
+      }
+
+      // 3. Ctrl+F or Cmd+F -> Enfocar buscador del guion
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        focusSearchInputRef.current?.focus();
+        return;
+      }
+
+      // 4. Arrow Navigation (Up / Down)
+      if (!isTyping && focusFilteredLines.length > 0) {
+        if (e.key === "ArrowDown" || e.key === "j") {
+          e.preventDefault();
+          setFocusedLineIndex((prev) => Math.min(prev + 1, focusFilteredLines.length - 1));
+        } else if (e.key === "ArrowUp" || e.key === "k") {
+          e.preventDefault();
+          setFocusedLineIndex((prev) => Math.max(prev - 1, 0));
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFocusMode, focusFilteredLines, focusedLineIndex, toggleFocusMode, toggleBookmark, addToast]);
+
+  if (isFocusMode) {
+    return (
+      <div className="focus-mode-container bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-lg space-y-6 transition-colors">
+        {/* GCP Console Style Focus Bar Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-[#1a73e8] text-white rounded-lg flex items-center justify-center font-bold shadow-xs">
+              <Eye className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  Modo Lectura (Focus Mode)
+                </h2>
+                <span className="gcp-badge-blue">
+                  Google Cloud Console View
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Espacio de trabajo maximizado sin distracciones. Atajos habilitados para máxima productividad.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search filter in focus mode */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <input
+                ref={focusSearchInputRef}
+                type="text"
+                value={focusSearchTerm}
+                onChange={(e) => setFocusSearchTerm(e.target.value)}
+                placeholder="Buscar (Ctrl+F)..."
+                className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#1a73e8]"
+              />
+            </div>
+
+            {/* Filter Bookmarks Toggle */}
+            <button
+              onClick={() => setOnlyBookmarksFilter(!onlyBookmarksFilter)}
+              className={`px-2.5 py-1.5 text-xs font-semibold rounded-md border flex items-center gap-1.5 transition-colors ${
+                onlyBookmarksFilter
+                  ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800"
+                  : "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+              }`}
+              title="Filtrar solo secciones marcadas (Ctrl+B)"
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${onlyBookmarksFilter ? "fill-amber-500 text-amber-600" : ""}`} />
+              <span>Marcados ({bookmarkedLineIds.size})</span>
+            </button>
+
+            {/* Speaker Filter */}
+            {parsedLines.length > 0 && (
+              <select
+                value={focusSpeakerFilter}
+                onChange={(e) => setFocusSpeakerFilter(e.target.value)}
+                className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-200 font-medium focus:outline-none"
+              >
+                <option value="all">👥 Todos los Locutores</option>
+                {Array.from(new Set(parsedLines.map(l => l.speaker))).map(spk => (
+                  <option key={spk} value={spk}>{spk}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Font size control */}
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md text-xs font-semibold">
+              <button
+                onClick={() => setFocusFontSize("sm")}
+                className={`px-2 py-1 rounded transition-colors ${focusFontSize === "sm" ? "bg-white dark:bg-slate-700 text-[#1a73e8] shadow-2xs" : "text-slate-500"}`}
+                title="Texto pequeño"
+              >
+                A-
+              </button>
+              <button
+                onClick={() => setFocusFontSize("base")}
+                className={`px-2 py-1 rounded transition-colors ${focusFontSize === "base" ? "bg-white dark:bg-slate-700 text-[#1a73e8] shadow-2xs" : "text-slate-500"}`}
+                title="Texto mediano"
+              >
+                A
+              </button>
+              <button
+                onClick={() => setFocusFontSize("lg")}
+                className={`px-2 py-1 rounded transition-colors ${focusFontSize === "lg" ? "bg-white dark:bg-slate-700 text-[#1a73e8] shadow-2xs" : "text-slate-500"}`}
+                title="Texto grande"
+              >
+                A+
+              </button>
+            </div>
+
+            <button
+              onClick={() => setIsCiteModalOpen(true)}
+              className="gcp-btn-secondary text-xs flex items-center gap-1.5"
+            >
+              <Quote className="w-3.5 h-3.5" />
+              <span>Citar Fuente</span>
+            </button>
+
+            {onSendToStudio && rawScript && (
+              <button
+                onClick={() => onSendToStudio(rawScript, parsedLines)}
+                className="gcp-btn-primary text-xs flex items-center gap-1.5"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Audio Deck</span>
+              </button>
+            )}
+
+            {/* Exit Focus Mode button with Esc key hint */}
+            <button
+              onClick={() => toggleFocusMode(false)}
+              className="px-3 py-1.5 bg-[#1a73e8] hover:bg-[#1557b0] text-white font-bold rounded-md text-xs flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              title="Presiona Esc para salir del modo lectura"
+            >
+              <Minimize2 className="w-4 h-4" />
+              <span>Salir (Esc)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Keyboard Shortcuts Hint Bar */}
+        <div className="flex flex-wrap items-center justify-between text-xs bg-[#f8f9fa] dark:bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 text-[11px]">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#1a73e8]" />
+              Atajos de Teclado Activos:
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[11px]">
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-800 dark:text-slate-200 shadow-2xs font-bold">Esc</kbd>
+              Salir
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[11px]">
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-800 dark:text-slate-200 shadow-2xs font-bold">Ctrl+B</kbd>
+              Marcar sección
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[11px]">
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-800 dark:text-slate-200 shadow-2xs font-bold">↑ / ↓</kbd>
+              Navegar líneas
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[11px]">
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-800 dark:text-slate-200 shadow-2xs font-bold">Ctrl+F</kbd>
+              Buscar
+            </span>
+          </div>
+          {focusFilteredLines.length > 0 && (
+            <span className="text-[11px] text-[#1a73e8] dark:text-blue-400 font-mono font-medium">
+              Línea activa: {focusedLineIndex + 1} / {focusFilteredLines.length}
+            </span>
+          )}
+        </div>
+
+        {/* Focus Mode Content Body */}
+        {rawScript ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 bg-[#f8f9fa] dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <span>Total Líneas: <strong className="text-slate-900 dark:text-white font-mono">{focusFilteredLines.length}</strong></span>
+                <span>Palabras: <strong className="text-slate-900 dark:text-white font-mono">{rawScript.trim().split(/\s+/).filter(Boolean).length}</strong></span>
+                <span>Tiempo de Lectura: <strong className="text-[#1a73e8] dark:text-blue-400 font-mono">~{Math.round((rawScript.trim().split(/\s+/).filter(Boolean).length / 140) * 60)} seg</strong></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopy}
+                  className="px-2.5 py-1 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded text-xs font-semibold flex items-center gap-1 hover:bg-slate-50"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? "Copiado" : "Copiar Guion"}
+                </button>
+              </div>
+            </div>
+
+            {/* Maximized Script Reader */}
+            <div className={`p-6 bg-slate-950 text-slate-100 rounded-xl border border-slate-800 space-y-4 max-h-[70vh] overflow-y-auto font-mono ${
+              focusFontSize === "sm" ? "text-xs leading-relaxed" : focusFontSize === "lg" ? "text-base leading-loose" : "text-sm leading-relaxed"
+            }`}>
+              {focusFilteredLines.length === 0 ? (
+                <div className="py-12 text-center space-y-3 text-slate-400">
+                  <Bookmark className="w-8 h-8 mx-auto text-slate-600" />
+                  <p className="text-sm font-semibold">No se encontraron líneas con los filtros actuales.</p>
+                  <p className="text-xs text-slate-500">Prueba ajustando la búsqueda o quitando el filtro de marcados.</p>
+                </div>
+              ) : (
+                focusFilteredLines.map((line, idx) => {
+                  const isBookmarked = bookmarkedLineIds.has(line.id);
+                  const isSelected = idx === focusedLineIndex;
+                  return (
+                    <div
+                      key={line.id}
+                      onClick={() => setFocusedLineIndex(idx)}
+                      className={`p-4 rounded-lg border transition-all cursor-pointer relative group ${
+                        isSelected
+                          ? "bg-slate-900 border-[#1a73e8] ring-1 ring-[#1a73e8] shadow-md"
+                          : isBookmarked
+                          ? "bg-amber-950/20 border-amber-500/50"
+                          : "bg-slate-900/90 border-slate-800 hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex flex-col items-center shrink-0 w-8 pt-0.5">
+                          <span className={`font-mono text-xs select-none ${isSelected ? "text-[#8ab4f8] font-bold" : "text-slate-600"}`}>
+                            {idx + 1}.
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleBookmark(line.id);
+                            }}
+                            className={`mt-2 p-1 rounded hover:bg-slate-800 transition-colors ${
+                              isBookmarked ? "text-amber-400" : "text-slate-600 group-hover:text-slate-400"
+                            }`}
+                            title="Marcar / Desmarcar sección (Ctrl+B)"
+                          >
+                            <Bookmark className={`w-4 h-4 ${isBookmarked ? "fill-amber-400" : ""}`} />
+                          </button>
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[#8ab4f8]">{line.speaker}</span>
+                              <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 uppercase">
+                                {line.speakerRole || "locutor"}
+                              </span>
+                              <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
+                              {isBookmarked && (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                  ★ Marcado
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isSelected && (
+                                <span className="text-[10px] bg-[#1a73e8]/20 text-[#8ab4f8] border border-[#1a73e8]/40 px-1.5 py-0.5 rounded font-mono">
+                                  Selección activa (Ctrl+B para marcar)
+                                </span>
+                              )}
+                              <span className="text-[11px] text-slate-500 font-mono">{line.gender} ({line.accent})</span>
+                            </div>
+                          </div>
+                          <p className="text-slate-100 font-serif leading-relaxed text-base pt-1">{line.text}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Edición de Dossier de Investigación (Full Workspace)
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCiteModalOpen(true)}
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded text-xs flex items-center gap-1"
+                >
+                  <Quote className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Insertar Cita</span>
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              value={reportText}
+              onChange={(e) => setReportText(e.target.value)}
+              rows={18}
+              className={`w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1a73e8] resize-y ${
+                focusFontSize === "sm" ? "text-xs" : focusFontSize === "lg" ? "text-base" : "text-sm"
+              }`}
+              placeholder="Escribe o pega aquí el informe..."
+            />
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-slate-500 font-mono">
+                Palabras: {reportText.trim().split(/\s+/).filter(Boolean).length} | Tiempo estimado de lectura: ~{(reportText.trim().split(/\s+/).filter(Boolean).length / 130).toFixed(1)} min
+              </span>
+              <button
+                onClick={handleGenerateScript}
+                disabled={loading || !reportText.trim()}
+                className="gcp-btn-primary text-xs flex items-center gap-2"
+              >
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4" />}
+                <span>Generar Guion de Radio v2.0</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Script Settings & Dossier Input */}
       <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-5 transition-colors">
-        <div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-            <Radio className="w-4 h-4 text-slate-900 dark:text-slate-100" />
-            Guionista v2.0 - Generador de Podcast
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Convierte informes de inteligencia en guiones de radio con formato profesional.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+              <Radio className="w-4 h-4 text-[#1a73e8]" />
+              Guionista v2.0 - Generador de Podcast
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Convierte informes de inteligencia en guiones de radio con formato profesional.
+            </p>
+          </div>
+
+          {/* Modo Lectura Button */}
+          <button
+            onClick={() => toggleFocusMode(true)}
+            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1a73e8] dark:bg-blue-950/80 dark:hover:bg-blue-900/80 dark:text-blue-300 font-semibold rounded-md border border-blue-200 dark:border-blue-800 text-xs flex items-center gap-1.5 transition-all shadow-2xs shrink-0 cursor-pointer"
+            title="Activar Modo Lectura para maximizar espacio sin distracciones"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Modo Lectura</span>
+          </button>
         </div>
 
         <div className="space-y-4 text-xs">
@@ -682,61 +1180,85 @@ export function ScriptStudioView({
           </div>
 
           {/* Speakers Configuration */}
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
-            <h4 className="font-semibold text-slate-800 flex items-center justify-between text-xs">
-              <span>Elenco de Voces del Show</span>
-              <Mic className="w-3.5 h-3.5 text-slate-900" />
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700 space-y-3">
+            <h4 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center justify-between text-xs">
+              <span>Elenco de Voces IA del Show</span>
+              <Mic className="w-3.5 h-3.5 text-amber-500" />
             </h4>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded border border-slate-200">
-                <span className="font-medium text-slate-800 flex items-center gap-1.5">
-                  <User className="w-3 h-3 text-slate-900" /> Moderador Principal:
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] bg-white dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700 gap-2">
+                <span className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
+                  <User className="w-3 h-3 text-indigo-500" /> Moderador:
                 </span>
-                <input
-                  type="text"
-                  value={hostName}
-                  onChange={(e) => setHostName(e.target.value)}
-                  className="px-2 py-0.5 border border-slate-300 rounded text-slate-800 w-24 text-right font-semibold"
-                />
+                <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={hostName}
+                    onChange={(e) => setHostName(e.target.value)}
+                    className="px-2 py-0.5 border border-slate-300 dark:border-slate-700 rounded text-slate-800 dark:text-slate-200 w-20 font-semibold bg-slate-50 dark:bg-slate-800"
+                  />
+                  <select
+                    value={hostVoiceProfile}
+                    onChange={(e) => setHostVoiceProfile(e.target.value)}
+                    className="px-2 py-0.5 border border-slate-300 dark:border-slate-700 rounded text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 text-[10px] font-mono font-medium flex-1 sm:flex-initial"
+                  >
+                    {AI_VOICE_PROFILES.map((vp) => (
+                      <option key={vp.id} value={vp.id}>
+                        🎙️ {vp.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {callers.map((c, idx) => (
-                <div key={idx} className="grid grid-cols-3 gap-1.5 text-[10px] bg-white p-2 rounded border border-slate-200">
-                  <input
-                    type="text"
-                    value={c.name}
-                    onChange={(e) => {
-                      const updated = [...callers];
-                      updated[idx].name = e.target.value;
-                      setCallers(updated);
-                    }}
-                    placeholder="Nombre"
-                    className="px-1.5 py-0.5 border border-slate-300 rounded font-medium text-slate-800"
-                  />
-                  <select
-                    value={c.gender}
-                    onChange={(e) => {
-                      const updated = [...callers];
-                      updated[idx].gender = e.target.value;
-                      setCallers(updated);
-                    }}
-                    className="px-1 py-0.5 border border-slate-300 rounded bg-white text-slate-800"
-                  >
-                    <option value="Female">Female</option>
-                    <option value="Male">Male</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={c.accent}
-                    onChange={(e) => {
-                      const updated = [...callers];
-                      updated[idx].accent = e.target.value;
-                      setCallers(updated);
-                    }}
-                    placeholder="Acento"
-                    className="px-1.5 py-0.5 border border-slate-300 rounded text-slate-800"
-                  />
+                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-[10px] bg-white dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700 gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-500">Caller #{idx + 1}:</span>
+                    <input
+                      type="text"
+                      value={c.name}
+                      onChange={(e) => {
+                        const updated = [...callers];
+                        updated[idx].name = e.target.value;
+                        setCallers(updated);
+                      }}
+                      placeholder="Nombre"
+                      className="px-1.5 py-0.5 border border-slate-300 dark:border-slate-700 rounded font-medium text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 w-20"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={c.gender}
+                      onChange={(e) => {
+                        const updated = [...callers];
+                        updated[idx].gender = e.target.value;
+                        setCallers(updated);
+                      }}
+                      className="px-1 py-0.5 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                    >
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                    </select>
+
+                    <select
+                      value={c.voiceProfile || "Kore"}
+                      onChange={(e) => {
+                        const updated = [...callers];
+                        updated[idx].voiceProfile = e.target.value;
+                        setCallers(updated);
+                      }}
+                      className="px-1.5 py-0.5 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono text-[10px]"
+                    >
+                      {AI_VOICE_PROFILES.map((vp) => (
+                        <option key={vp.id} value={vp.id}>
+                          🎙️ {vp.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               ))}
             </div>
@@ -844,6 +1366,26 @@ export function ScriptStudioView({
                   </span>
                 )}
 
+                {/* Smart Refine Button (Gemini AI) */}
+                <button
+                  onClick={handleSmartRefineScript}
+                  disabled={isRefining}
+                  className="px-3 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  title="Detectar y corregir errores gramaticales e inconsistencias lógicas con Gemini"
+                >
+                  {isRefining ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Refinando Guion...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                      <span>Smart Refine (Gemini)</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   onClick={handleAnalyzeReadability}
                   className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded text-xs font-medium flex items-center gap-1 transition-colors border border-indigo-500/30"
@@ -851,6 +1393,15 @@ export function ScriptStudioView({
                 >
                   <Sparkles className="w-3 h-3" />
                   Readability Analyzer
+                </button>
+
+                <button
+                  onClick={() => toggleFocusMode(true)}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors border border-blue-400/40"
+                  title="Activar Modo Lectura (Focus Mode)"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Modo Lectura</span>
                 </button>
 
                 <button
@@ -873,6 +1424,89 @@ export function ScriptStudioView({
               </div>
             </div>
 
+            {/* BULK SELECTION & EDITING CONTROL BAR */}
+            {parsedLines.length > 0 && (
+              <div className="px-6 py-2.5 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSelectAllLines}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-mono text-[11px] font-bold transition-colors border border-slate-700 flex items-center gap-1.5"
+                  >
+                    <span>{selectedLineIds.size === parsedLines.length ? "Deseleccionar Todo" : "Seleccionar Todo"}</span>
+                    <span className="bg-slate-900 text-amber-400 px-1.5 py-0.2 rounded text-[10px]">
+                      {selectedLineIds.size}/{parsedLines.length}
+                    </span>
+                  </button>
+
+                  {selectedLineIds.size > 0 && (
+                    <button
+                      onClick={() => setSelectedLineIds(new Set())}
+                      className="text-slate-400 hover:text-slate-200 font-mono text-[10px] underline ml-1"
+                    >
+                      Limpiar Selección
+                    </button>
+                  )}
+                </div>
+
+                {selectedLineIds.size > 0 ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-amber-400 font-mono font-bold text-[10px] uppercase tracking-wider">
+                      Acciones Masivas:
+                    </span>
+
+                    {/* Bulk Role Selector */}
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) handleBulkChangeRole(e.target.value as any);
+                        e.target.value = "";
+                      }}
+                      defaultValue=""
+                      className="bg-slate-900 text-slate-200 border border-slate-700 text-[11px] rounded px-2 py-1 outline-none"
+                    >
+                      <option value="" disabled>Cambiar Rol...</option>
+                      <option value="host">Host / Moderador</option>
+                      <option value="caller">Caller / Participante</option>
+                    </select>
+
+                    {/* Bulk Speaker Reassign */}
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) handleBulkChangeSpeaker(e.target.value);
+                        e.target.value = "";
+                      }}
+                      defaultValue=""
+                      className="bg-slate-900 text-slate-200 border border-slate-700 text-[11px] rounded px-2 py-1 outline-none"
+                    >
+                      <option value="" disabled>Reasignar Locutor...</option>
+                      <option value={hostName}>{hostName} (Host)</option>
+                      {callers.map((c, i) => (
+                        <option key={i} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+
+                    {/* Bulk Sentiment */}
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) handleBulkChangeSentiment(e.target.value as any);
+                        e.target.value = "";
+                      }}
+                      defaultValue=""
+                      className="bg-slate-900 text-slate-200 border border-slate-700 text-[11px] rounded px-2 py-1 outline-none"
+                    >
+                      <option value="" disabled>Cambiar Tono/Sentimiento...</option>
+                      <option value="neutral">Neutral</option>
+                      <option value="enthusiastic">Entusiasta</option>
+                      <option value="concerned">Preocupado / Crítico</option>
+                    </select>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Selecciona casillas de verificación para edición masiva de locutores y roles
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Dark Terminal Styled Lines matching Design HTML */}
             <div className="p-6 font-mono text-xs leading-loose max-h-[500px] overflow-y-auto space-y-4">
               {loading && parsedLines.length === 0 && (
@@ -882,30 +1516,67 @@ export function ScriptStudioView({
                   <div className="h-20 bg-slate-800/60 rounded"></div>
                 </div>
               )}
-              {parsedLines.map((line, idx) => (
-                <div key={line.id} className="p-3 bg-slate-950/60 rounded border border-slate-800/80 relative">
-                  {collabMode && idx === 1 && (
-                    <div className="absolute -top-2.5 right-4 bg-emerald-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1 animate-bounce">
-                      <span>✏️ Ana editando aquí</span>
+              {parsedLines.map((line, idx) => {
+                const isSelected = selectedLineIds.has(line.id);
+
+                return (
+                  <div
+                    key={line.id}
+                    className={`p-3 rounded border relative transition-all ${
+                      isSelected
+                        ? "bg-slate-900 border-amber-500/80 shadow-md"
+                        : "bg-slate-950/60 border-slate-800/80"
+                    }`}
+                  >
+                    {collabMode && idx === 1 && (
+                      <div className="absolute -top-2.5 right-4 bg-emerald-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1 animate-bounce">
+                        <span>✏️ Ana editando aquí</span>
+                      </div>
+                    )}
+                    {collabMode && idx === 3 && (
+                      <div className="absolute -top-2.5 right-4 bg-amber-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1">
+                        <span>👁️ Carlos viendo</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[11px] mb-1.5 flex-wrap gap-1">
+                      <div className="flex items-center gap-2.5">
+                        {/* LINE SELECTION CHECKBOX FOR BULK ACTIONS */}
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectLine(line.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-700 accent-amber-500 cursor-pointer"
+                          title="Seleccionar para edición masiva"
+                        />
+                        <span className="font-bold text-pink-400">{line.speaker}:</span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-mono ${
+                            line.speakerRole === "host"
+                              ? "bg-pink-950/80 text-pink-300 border border-pink-800"
+                              : "bg-emerald-950/80 text-emerald-300 border border-emerald-800"
+                          }`}
+                        >
+                          {line.speakerRole}
+                        </span>
+                        <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                        <span>{line.gender}</span>
+                        <span>|</span>
+                        <span className="text-emerald-400">{line.accent}</span>
+                        <span>|</span>
+                        <span className="text-slate-400">{line.timestamp}</span>
+                      </div>
                     </div>
-                  )}
-                  {collabMode && idx === 3 && (
-                    <div className="absolute -top-2.5 right-4 bg-amber-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1">
-                      <span>👁️ Carlos viendo</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-[11px] mb-1.5 flex-wrap gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-pink-400">{line.speaker}:</span>
-                      <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
-                    </div>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {line.gender} | <span className="text-emerald-400">{line.accent}</span>
-                    </span>
+
+                    <p className="text-slate-200 font-serif leading-relaxed pl-6 border-l-2 border-slate-800">
+                      {line.text}
+                    </p>
                   </div>
-                  <p className="text-slate-200 font-serif leading-relaxed">{line.text}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (

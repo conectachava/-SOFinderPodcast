@@ -145,6 +145,8 @@ export default function Home() {
   const [authRequiredOpen, setAuthRequiredOpen] = useState<boolean>(false);
   const [authRequiredFeature, setAuthRequiredFeature] = useState<string>("esta función avanzada");
   const [language, setLanguage] = useState<"es" | "en">("es");
+  // Focus Mode state for ScriptStudioView
+  const [isFocusModeActive, setIsFocusModeActive] = useState<boolean>(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     try {
       const onboarded = localStorage.getItem("sf_onboarded");
@@ -459,15 +461,17 @@ export default function Home() {
             />
           ) : (
             <>
-              {/* Progress Indicator for Pipeline Flow */}
-              <aside aria-label="Pipeline Progress">
-                <PipelineProgress
-                  activeTab={activeTab}
-                  hasReport={!!reportText}
-                  hasScript={scriptLines.length > 0} 
-                  setActiveTab={setActiveTab}
-                />
-              </aside>
+              {/* Progress Indicator for Pipeline Flow - Hidden during Focus Mode */}
+              {!isFocusModeActive && (
+                <aside aria-label="Pipeline Progress">
+                  <PipelineProgress
+                    activeTab={activeTab}
+                    hasReport={!!reportText}
+                    hasScript={scriptLines.length > 0} 
+                    setActiveTab={setActiveTab}
+                  />
+                </aside>
+              )}
 
               <ErrorBoundary>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] border border-slate-200/90 dark:border-slate-800 overflow-hidden min-h-[720px] flex flex-col relative transition-colors duration-200">
@@ -496,6 +500,7 @@ export default function Home() {
                     <ScriptStudioView
                       initialReport={reportText}
                       onSendToStudio={handleScriptStudioComplete}
+                      onToggleFocusMode={(isFocused) => setIsFocusModeActive(isFocused)}
                     />
                   )}
 
