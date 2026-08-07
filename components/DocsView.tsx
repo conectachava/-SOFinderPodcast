@@ -114,8 +114,12 @@ export function DocsView() {
           </p>
 
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs font-mono space-y-2 text-slate-800">
-            <p className="font-semibold text-indigo-600">Pipeline de Calidad de Fuentes:</p>
-            <p>1. Selección de Estrategia (Noticias Tecnológicas 70% News / 30% Web Reputación)</p>
+            <p className="font-semibold text-indigo-600">Estrategias de Búsqueda Disponibles:</p>
+            <p>1. Noticia Tecnológica (Query modifier: &quot;noticia tecnología última hora reportes&quot; | Min Rep: 0.7)</p>
+            <p>2. Espectáculos (Query modifier: &quot;espectáculos entretenimiento noticias&quot; | Min Rep: 0.6)</p>
+            <p>3. Análisis de Producto (Query modifier: &quot;review análisis especificaciones pruebas&quot; | Min Rep: 0.5)</p>
+            <p>4. Movie Review (Query modifier: &quot;movie review&quot; | Min Rep: 0.6)</p>
+            <p>5. General / Explicativo (Query modifier: &quot;informe noticias contexto&quot; | Min Rep: 0.5)</p>
             <p>2. Filtro de Frescura (24h - 72h para noticias recientes)</p>
             <p>3. Detección Anticlickbait (Filtra mayúsculas excesivas y promesas engañosas)</p>
             <p>4. Generación del Reporte (Resumen Ejecutivo, Puntos Clave, Debate, Fuentes)</p>

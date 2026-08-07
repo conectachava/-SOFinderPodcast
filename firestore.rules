@@ -66,6 +66,17 @@ service cloud.firestore {
         && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 200) );
     }
 
+    function isValidVoiceProfile(data) {
+      return data.keys().hasAll(['role', 'pitch', 'speed', 'warmth', 'updatedAt'])
+        && data.keys().size() <= 8
+        && data.role in ['Host', 'Expert', 'Analyst']
+        && ( !('voiceName' in data) || (data.voiceName is string && data.voiceName.size() <= 100) )
+        && data.pitch is number
+        && data.speed is number
+        && data.warmth is number
+        && data.updatedAt is string;
+    }
+
     match /admins/{userId} {
       allow read: if isSignedIn();
     }
@@ -86,6 +97,12 @@ service cloud.firestore {
       match /drafts/{draftId} {
         allow read, list: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidId(draftId) && isValidDraft(incoming());
+        allow delete: if isOwner(userId);
+      }
+
+      match /voiceProfiles/{profileId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidId(profileId) && isValidVoiceProfile(incoming());
         allow delete: if isOwner(userId);
       }
 

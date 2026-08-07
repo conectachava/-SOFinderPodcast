@@ -8,6 +8,7 @@ import { SourceBadge } from "./SourceBadge";
 import { useToast } from "./Toast";
 import type { SignalAnalysisResult } from "@/app/api/source-finder/route";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
+import { safeFetchJson } from "@/lib/utils";
 
 export function SourceFinderView({ onUseReportForScript }: { onUseReportForScript?: (report: string) => void }) {
   const { addToast } = useToast();
@@ -61,7 +62,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
     );
 
     try {
-      const res = await fetch("/api/source-finder", {
+      const response = await safeFetchJson("/api/source-finder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,12 +72,11 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
         }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Error al investigar el tema");
+      if (!response.ok) {
+        throw new Error(response.error || "Error al investigar el tema");
       }
 
-      const data = await res.json();
+      const data = response.data;
       setReport(data.report);
       setQualifiedSources(data.qualifiedSources || []);
       setRawSources(data.rawSources || []);
@@ -96,6 +96,9 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
         );
       }
     } catch (err: any) {
+      if (err?.name === "AbortError" || String(err?.message || "").toLowerCase().includes("abort")) {
+        return;
+      }
       const msg = err.message || "Ocurrió un error inesperado en la investigación.";
       setError(msg);
       addToast("Error en Búsqueda", msg, "error");
@@ -165,6 +168,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
               <option value="Noticia Tecnológica">Noticia Tecnológica (70% News / 30% Web Reputada)</option>
               <option value="Espectáculos">Espectáculos / Entretenimiento (60% Web / 30% News / 10% YT)</option>
               <option value="Análisis de Producto">Análisis de Producto (Reviews / Reddit / YT)</option>
+              <option value="Movie Review">Movie Review (Análisis Cinematográfico / Crítica / 60% Reputación)</option>
               <option value="General">General / Explicativo (Wikipedia / Ensayos / Scholar)</option>
             </select>
           </div>

@@ -147,17 +147,17 @@ export default function Home() {
   const [language, setLanguage] = useState<"es" | "en">("es");
   // Focus Mode state for ScriptStudioView
   const [isFocusModeActive, setIsFocusModeActive] = useState<boolean>(false);
-  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
-
-  useEffect(() => {
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
     try {
       const onboarded = localStorage.getItem("sf_onboarded");
       if (!onboarded) {
         localStorage.setItem("sf_onboarded", "true");
-        setIsTutorialOpen(true);
+        return true;
       }
     } catch (e) {}
-  }, []);
+    return false;
+  });
 
   // Local history state
   const [history, setHistory] = useState<PodcastHistoryItem[]>([]);
@@ -468,6 +468,9 @@ export default function Home() {
                     hasReport={!!reportText}
                     hasScript={scriptLines.length > 0} 
                     setActiveTab={setActiveTab}
+                    reportText={reportText}
+                    scriptLines={scriptLines}
+                    storyboardData={storyboardData}
                   />
                 </aside>
               )}

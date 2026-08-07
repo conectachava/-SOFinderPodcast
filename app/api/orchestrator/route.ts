@@ -21,12 +21,13 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ topic, contentType }),
     });
 
-    if (!sfRes.ok) {
-      const err = await sfRes.json();
-      throw new Error(`SourceFinder step failed: ${err.error || sfRes.statusText}`);
-    }
+    const sfText = await sfRes.text();
+    let sfData: any = {};
+    try { sfData = JSON.parse(sfText); } catch {}
 
-    const sfData = await sfRes.json();
+    if (!sfRes.ok) {
+      throw new Error(`SourceFinder step failed: ${sfData.error || sfRes.statusText || "Server error"}`);
+    }
 
     // Step 2: ScriptWriter
     const swRes = await fetch(`${baseUrl}/api/script-writer`, {
@@ -39,12 +40,13 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    if (!swRes.ok) {
-      const err = await swRes.json();
-      throw new Error(`ScriptWriter step failed: ${err.error || swRes.statusText}`);
-    }
+    const swText = await swRes.text();
+    let swData: any = {};
+    try { swData = JSON.parse(swText); } catch {}
 
-    const swData = await swRes.json();
+    if (!swRes.ok) {
+      throw new Error(`ScriptWriter step failed: ${swData.error || swRes.statusText || "Server error"}`);
+    }
 
     // Step 3: Storyboard Generator (Flow Video)
     let storyboardData = null;
@@ -59,11 +61,32 @@ export async function POST(req: NextRequest) {
       });
 
       if (sbRes.ok) {
-        const sbResult = await sbRes.json();
+        const sbText = await sbRes.text();
+        const sbResult = JSON.parse(sbText);
         storyboardData = sbResult.storyboard;
       }
     } catch (sbErr) {
       console.warn("Storyboard generation step skipped/warning:", sbErr);
+    }
+
+    // Step 4: AI Cover Art Generator (Gemini Image Generation)
+    let coverArtUrl = null;
+    try {
+      const caRes = await fetch(`${baseUrl}/api/cover-art`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          scriptText: swData.rawScript,
+        }),
+      });
+
+      if (caRes.ok) {
+        const caResult = await caRes.json();
+        coverArtUrl = caResult.coverArtUrl;
+      }
+    } catch (caErr) {
+      console.warn("Cover art generation step skipped/warning:", caErr);
     }
 
     return NextResponse.json({
@@ -77,6 +100,7 @@ export async function POST(req: NextRequest) {
       scriptText: swData.rawScript,
       scriptLines: swData.lines,
       storyboard: storyboardData,
+      coverArtUrl,
       estimatedDuration: swData.estimatedDuration,
       wordCount: swData.wordCount,
       timestamp: new Date().toISOString(),

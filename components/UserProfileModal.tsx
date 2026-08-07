@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle } from "lucide-react";
+import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal } from "lucide-react";
 import { signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 import { auth, db, clearFirestoreAuthCache } from "@/lib/firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
@@ -59,6 +59,24 @@ export function UserProfileModal({
   const [tokenBalance, setTokenBalance] = useState<number>(4250);
   const [pendingUsers, setPendingUsers] = useState<UserProfileWithStatus[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Development Health Check Console state
+  const [devHealthConsoleActive, setDevHealthConsoleActive] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("sf_dev_health_console") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const handleToggleDevHealthConsole = (val: boolean) => {
+    setDevHealthConsoleActive(val);
+    try {
+      localStorage.setItem("sf_dev_health_console", val ? "true" : "false");
+      window.dispatchEvent(new CustomEvent("sf_dev_console_toggle", { detail: { active: val } }));
+    } catch (e) {}
+  };
 
   // Voice Identity state
   const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>(() => {
@@ -1119,6 +1137,24 @@ export function UserProfileModal({
                       checked={themeSchedule}
                       onChange={(e) => onToggleThemeSchedule && onToggleThemeSchedule(e.target.checked)}
                       className="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-slate-900"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2.5 border-t border-indigo-100 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20 p-2.5 rounded-xl">
+                    <div>
+                      <span className="block text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Verificación de Salud (Dev Health Check Console)
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Muestra la consola flotante para depurar errores y sync de Firebase en tiempo real.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={devHealthConsoleActive}
+                      onChange={(e) => handleToggleDevHealthConsole(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
                     />
                   </div>
                 </div>

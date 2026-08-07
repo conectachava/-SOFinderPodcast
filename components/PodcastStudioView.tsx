@@ -17,26 +17,191 @@ import {
   Sliders,
   User,
   Activity,
+  Clock,
+  Image as ImageIcon,
+  FileText,
+  Copy,
+  Check,
+  Share2,
+  Hash,
+  PauseCircle,
 } from "lucide-react";
+import { safeFetchJson } from "@/lib/utils";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+import { NarrativeArcChart } from "./NarrativeArcChart";
+import { VoiceProfileManager } from "./VoiceProfileManager";
+
+export const AMBIENT_MUSIC_TRACKS = [
+  { id: "none", label: "🚫 Sin Música (Solo Voces)", desc: "Pista limpia en primer plano sin ambiente" },
+  { id: "ambient_lounge", label: "☕ Ambient Lounge", desc: "Texturas sintetizadas cálidas y relajantes" },
+  { id: "acoustic_warmth", label: "🎸 Acoustic Warmth", desc: "Acordes de guitarra y ambiente orgánico" },
+  { id: "tech_synth", label: "⚡ Tech Synth Beat", desc: "Pulso electrónico sutil e innovador" },
+  { id: "lofi_sunset", label: "🌆 Lofi Sunset", desc: "Beats lofi calmos con textura vintage" },
+  { id: "gentle_piano", label: "🎹 Gentle Piano", desc: "Piano minimalista reflexivo de fondo" },
+  { id: "cinematic_space", label: "🌌 Cinematic Space", desc: "Atmósfera espacial envolvente" },
+];
+
+function decodePcmBase64ToBuffer(audioContext: AudioContext, base64Data: string, sampleRate = 24000): AudioBuffer {
+  const binaryString = window.atob(base64Data);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const int16Array = new Int16Array(bytes.buffer);
+  const float32Array = new Float32Array(int16Array.length);
+  for (let i = 0; i < int16Array.length; i++) {
+    float32Array[i] = int16Array[i] / 32768.0;
+  }
+  const buffer = audioContext.createBuffer(1, float32Array.length, sampleRate);
+  buffer.getChannelData(0).set(float32Array);
+  return buffer;
+}
+
+function bufferToWavBlob(buffer: AudioBuffer): Blob {
+  const numOfChan = buffer.numberOfChannels;
+  const length = buffer.length * numOfChan * 2 + 44;
+  const out = new DataView(new ArrayBuffer(length));
+  let channels: Float32Array[] = [];
+  let sampleRate = buffer.sampleRate;
+  let offset = 0;
+  let pos = 0;
+
+  function writeString(str: string) {
+    for (let i = 0; i < str.length; i++) {
+      out.setUint8(pos++, str.charCodeAt(i));
+    }
+  }
+
+  function setUint16(data: number) {
+    out.setUint16(pos, data, true);
+    pos += 2;
+  }
+
+  function setUint32(data: number) {
+    out.setUint32(pos, data, true);
+    pos += 4;
+  }
+
+  writeString("RIFF");
+  setUint32(length - 8);
+  writeString("WAVE");
+  writeString("fmt ");
+  setUint32(16);
+  setUint16(1);
+  setUint16(numOfChan);
+  setUint32(sampleRate);
+  setUint32(sampleRate * 2 * numOfChan);
+  setUint16(numOfChan * 2);
+  setUint16(16);
+  writeString("data");
+  setUint32(length - pos - 4);
+
+  for (let i = 0; i < buffer.numberOfChannels; i++) {
+    channels.push(buffer.getChannelData(i));
+  }
+
+  while (offset < buffer.length) {
+    for (let i = 0; i < numOfChan; i++) {
+      let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+      sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+      out.setInt16(pos, sample, true);
+      pos += 2;
+    }
+    offset++;
+  }
+
+  return new Blob([out], { type: "audio/wav" });
+}
 
 interface PodcastStudioViewProps {
   scriptLines: ScriptLine[];
   rawScript?: string;
   topic?: string;
+  coverArtUrl?: string;
 }
 
 export function PodcastStudioView({
   scriptLines: initialLines,
   rawScript: initialRawScript,
   topic = "Edición Especial Podcast",
+  coverArtUrl: initialCoverArtUrl,
 }: PodcastStudioViewProps) {
   const { addToast } = useToast();
 
+  const [prevInitialLines, setPrevInitialLines] = useState(initialLines);
   const [lines, setLines] = useState<ScriptLine[]>(initialLines);
+
+  if (initialLines !== prevInitialLines) {
+    setPrevInitialLines(initialLines);
+    if (initialLines && initialLines.length > 0) {
+      setLines(initialLines);
+    }
+  }
+
+  const [prevInitialCover, setPrevInitialCover] = useState(initialCoverArtUrl);
+  const [coverArt, setCoverArt] = useState<string | null>(initialCoverArtUrl || null);
+
+  if (initialCoverArtUrl !== prevInitialCover) {
+    setPrevInitialCover(initialCoverArtUrl);
+    if (initialCoverArtUrl) {
+      setCoverArt(initialCoverArtUrl);
+    }
+  }
+
+  const [isGeneratingCover, setIsGeneratingCover] = useState<boolean>(false);
+
+  // Calculate estimated podcast duration based on total script word count (~140 wpm rate)
+  const { totalWords, estimatedDurationFormatted, estimatedMinutesSeconds } = React.useMemo(() => {
+    const words = lines.reduce((acc, l) => {
+      const textVal = l.text || "";
+      return acc + textVal.trim().split(/\s+/).filter(Boolean).length;
+    }, 0);
+
+    const totalSecs = Math.max(0, Math.round((words / 140) * 60));
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    const formattedMS = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+
+    return {
+      totalWords: words,
+      totalSeconds: totalSecs,
+      estimatedMinutesSeconds: formattedMS,
+      estimatedDurationFormatted: `~${formattedMS} min (${words} palabras)`,
+    };
+  }, [lines]);
+
+  const handleGenerateCoverArt = async () => {
+    setIsGeneratingCover(true);
+    addToast("Generando Portada IA", "Creando diseño de portada temática con Gemini...", "info");
+    try {
+      const res = await safeFetchJson("/api/cover-art", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          scriptText: lines.map((l) => l.text).join(" "),
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(res.error || "No se pudo generar la portada");
+      }
+
+      const data = res.data;
+      if (data.coverArtUrl) {
+        setCoverArt(data.coverArtUrl);
+        addToast("Portada Generada", "Diseño de portada temática asignado al episodio.", "success");
+      }
+    } catch (err: any) {
+      addToast("Error Portada", err.message || "Falló la generación de portada", "error");
+    } finally {
+      setIsGeneratingCover(false);
+    }
+  };
   const [activeLineIdx, setActiveLineIdx] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
@@ -46,6 +211,200 @@ export function PodcastStudioView({
   const [musicDucking, setMusicDucking] = useState<number>(0.15); // background ambient level
   const [geminiAudioLoading, setGeminiAudioLoading] = useState<boolean>(false);
   const [geminiAudioUrl, setGeminiAudioUrl] = useState<string | null>(null);
+
+  // Ambient Music Selection State
+  const [selectedAmbientTrack, setSelectedAmbientTrack] = useState<string>("ambient_lounge");
+  const [ambientVolume, setAmbientVolume] = useState<number>(0.15);
+
+  // Smart Pause Feature State (Feature 4)
+  const [smartPauseEnabled, setSmartPauseEnabled] = useState<boolean>(true);
+  const [smartPauseDurations, setSmartPauseDurations] = useState<Record<string, number>>({
+    neutral: 300,
+    enthusiastic: 200,
+    concerned: 700,
+    thoughtful: 1000,
+  });
+
+  // Podcast Hosting Metadata State (Feature 1)
+  const [metadataResult, setMetadataResult] = useState<{
+    title: string;
+    description: string;
+    showNotes: { timestamp: string; title: string; description: string }[];
+    hashtags: string[];
+    platformOptimization?: { spotifyTip: string; applePodcastsTip: string; youtubeTip: string };
+  } | null>(null);
+  const [isGeneratingMetadata, setIsGeneratingMetadata] = useState<boolean>(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleGenerateMetadata = async () => {
+    setIsGeneratingMetadata(true);
+    addToast(
+      "Analizando Guion",
+      "Gemini está analizando el guion para generar título optimizado, descripción y show notes...",
+      "info"
+    );
+    try {
+      const res = await safeFetchJson("/api/podcast-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          script: initialRawScript,
+          lines,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(res.error || "No se pudieron generar los metadatos");
+      }
+
+      setMetadataResult(res.data);
+      addToast(
+        "Metadatos Generados",
+        "Título SEO, resumen, show notes y hashtags creados exitosamente.",
+        "success"
+      );
+    } catch (err: any) {
+      addToast("Error Metadatos", err?.message || "Error al analizar el guion con Gemini.", "error");
+    } finally {
+      setIsGeneratingMetadata(false);
+    }
+  };
+
+  const handleCopyText = (text: string, fieldName: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      addToast("Copiado al Portapapeles", `${fieldName} copiado exitosamente.`, "info");
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (e) {
+      console.warn("Copy error:", e);
+    }
+  };
+
+  // Batch Gemini TTS State & Progress
+  const [isBatchProcessingTTS, setIsBatchProcessingTTS] = useState<boolean>(false);
+  const [batchProgress, setBatchProgress] = useState<number>(0);
+  const [batchCurrentLine, setBatchCurrentLine] = useState<number>(0);
+  const [batchStatusText, setBatchStatusText] = useState<string>("");
+  const [batchAudioObjectUrl, setBatchAudioObjectUrl] = useState<string | null>(null);
+  const [isBatchAudioPlaying, setIsBatchAudioPlaying] = useState<boolean>(false);
+  const batchAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleBatchProcessTTS = async () => {
+    if (!lines || lines.length === 0) {
+      addToast("Síntesis Vacía", "No hay líneas en el guion para sintetizar.", "error");
+      return;
+    }
+
+    setIsBatchProcessingTTS(true);
+    setBatchProgress(0);
+    setBatchCurrentLine(0);
+    setBatchStatusText("Inicializando sintetizador por lote Gemini TTS y decodificador Web Audio...");
+    setBatchAudioObjectUrl(null);
+
+    addToast(
+      "Síntesis Masiva Iniciada",
+      `Procesando secuencialmente ${lines.length} líneas con la API de Gemini TTS...`,
+      "info"
+    );
+
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtxClass({ sampleRate: 24000 });
+      const decodedBuffers: AudioBuffer[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        setBatchCurrentLine(i + 1);
+        const percent = Math.round(((i + 1) / lines.length) * 100);
+        setBatchProgress(percent);
+        setBatchStatusText(
+          `Línea ${i + 1}/${lines.length} [${line.speaker}]: "${line.text.slice(0, 32)}..."`
+        );
+
+        const voiceName =
+          (line as any).voiceName ||
+          (line.speakerRole === "host" ? "Zephyr" : line.gender === "Female" ? "Kore" : "Fenrir");
+
+        const res = await safeFetchJson("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: line.text,
+            voiceName,
+          }),
+        });
+
+        if (res.ok && res.data?.audioBase64) {
+          const { audioBase64 } = res.data;
+          try {
+            const buf = decodePcmBase64ToBuffer(audioCtx, audioBase64, 24000);
+            decodedBuffers.push(buf);
+          } catch (decodeErr) {
+            console.warn("No se pudo decodificar el fragmento PCM, omitiendo línea", decodeErr);
+          }
+        } else {
+          console.warn(`Línea ${i + 1} TTS devolvió respuesta no válida`);
+        }
+      }
+
+      if (decodedBuffers.length === 0) {
+        throw new Error("No se pudo sintetizar ningún fragmento de audio válido.");
+      }
+
+      setBatchStatusText("Ensamblando pista maestra de voz e insertando Pausas Inteligentes según emoción...");
+
+      // Calculate dynamic Smart Pause samples per line based on emotion/sentiment
+      let totalPauseSamples = 0;
+      const pauseSamplesPerLine: number[] = [];
+
+      for (let i = 0; i < decodedBuffers.length; i++) {
+        let pMs = 300;
+        if (smartPauseEnabled) {
+          const lineSentiment = (lines[i]?.sentiment || "neutral").toLowerCase();
+          if (lineSentiment.includes("enthusiastic") || lineSentiment.includes("entusiasta")) {
+            pMs = smartPauseDurations.enthusiastic || 200;
+          } else if (lineSentiment.includes("concerned") || lineSentiment.includes("preocupad")) {
+            pMs = smartPauseDurations.concerned || 700;
+          } else if (lineSentiment.includes("thoughtful") || lineSentiment.includes("reflexivo")) {
+            pMs = smartPauseDurations.thoughtful || 1000;
+          } else {
+            pMs = smartPauseDurations.neutral || 300;
+          }
+        }
+        const pSamples = Math.round(24000 * (pMs / 1000));
+        pauseSamplesPerLine.push(pSamples);
+        totalPauseSamples += pSamples;
+      }
+
+      let totalSamples = decodedBuffers.reduce((acc, b) => acc + b.length, 0) + totalPauseSamples;
+
+      const combinedBuffer = audioCtx.createBuffer(1, totalSamples, 24000);
+      const channelData = combinedBuffer.getChannelData(0);
+
+      let offset = 0;
+      decodedBuffers.forEach((buf, i) => {
+        channelData.set(buf.getChannelData(0), offset);
+        const pSamples = pauseSamplesPerLine[i] || 6000;
+        offset += buf.length + pSamples;
+      });
+
+      const wavBlob = bufferToWavBlob(combinedBuffer);
+      const url = URL.createObjectURL(wavBlob);
+      setBatchAudioObjectUrl(url);
+
+      addToast(
+        "Producción Completa",
+        `Episodio maestro de ${lines.length} líneas sintetizado con Pausas Inteligentes por emoción.`,
+        "success"
+      );
+    } catch (err: any) {
+      addToast("Error en Síntesis por Lote", err?.message || "Falló la producción por lote.", "error");
+    } finally {
+      setIsBatchProcessingTTS(false);
+    }
+  };
 
   // Background Sound Effects Library State
   const [activeSfx, setActiveSfx] = useState<string | null>("synth");
@@ -166,16 +525,6 @@ export function PodcastStudioView({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameId = useRef<number | null>(null);
   const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Sync lines state when initialLines change
-  const [prevInitialLines, setPrevInitialLines] = useState(initialLines);
-  if (initialLines !== prevInitialLines) {
-    setPrevInitialLines(initialLines);
-    if (initialLines && initialLines.length > 0) {
-      setLines(initialLines);
-      setActiveLineIdx(0);
-    }
-  }
 
   // Auto-scroll to active line
   useEffect(() => {
@@ -421,7 +770,7 @@ export function PodcastStudioView({
 
     try {
       const fullText = lines.map((l) => `${l.speaker}: ${l.text}`).join("\n");
-      const res = await fetch("/api/tts", {
+      const response = await safeFetchJson("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -430,17 +779,19 @@ export function PodcastStudioView({
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Gemini TTS falló");
+      if (!response.ok) {
+        throw new Error(response.error || "Gemini TTS falló");
       }
 
-      const data = await res.json();
+      const data = response.data;
       if (data.audioBase64) {
         setGeminiAudioUrl(`data:${data.mimeType};base64,${data.audioBase64}`);
         addToast("Audio Listo", "Audio Gemini TTS generado exitosamente.", "success");
       }
     } catch (err: any) {
+      if (err?.name === "AbortError" || String(err?.message || "").toLowerCase().includes("abort")) {
+        return;
+      }
       const msg = err.message || "Error al sintetizar audio Gemini";
       addToast("Error de Síntesis", msg, "error");
     } finally {
@@ -478,40 +829,102 @@ export function PodcastStudioView({
     <div className="space-y-6">
       {/* Studio Header & Main Audio Deck */}
       <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg space-y-6 border border-slate-800">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <span className="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold rounded uppercase tracking-wider">
-              Radio Studio Deck v2.0
-            </span>
-            <h2 className="text-lg font-extrabold mt-1 text-slate-100">{topic}</h2>
-            <p className="text-xs text-slate-400">
-              Módulo de Doblaje Multivoz Sincronizado | Pista Principal + Mezclador Ambiental
-            </p>
+        {/* Cover Art Banner & Duration Metrics Row */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b border-slate-800 pb-5">
+          <div className="flex items-center gap-4">
+            {/* Thematic Cover Art Display */}
+            <div className="relative group shrink-0">
+              {coverArt ? (
+                <img
+                  src={coverArt}
+                  alt={`Portada de ${topic}`}
+                  referrerPolicy="no-referrer"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover border border-slate-700 shadow-md group-hover:opacity-90 transition-opacity"
+                />
+              ) : (
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-slate-800 border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 gap-1 p-2 text-center">
+                  <ImageIcon className="w-6 h-6 text-slate-400" />
+                  <span className="text-[10px] font-medium">Sin Portada</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleGenerateCoverArt}
+                disabled={isGeneratingCover}
+                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-[11px] font-bold gap-1 p-1 text-center"
+                title="Generar o regenerar portada temática con Gemini IA"
+              >
+                {isGeneratingCover ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>IA Portada</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold rounded uppercase tracking-wider">
+                  Radio Studio Deck v2.0
+                </span>
+                <span className="px-2.5 py-0.5 bg-indigo-950/80 text-indigo-300 border border-indigo-800/80 text-[10px] font-mono font-bold rounded flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-indigo-400" />
+                  <span>Duración Estimada: {estimatedMinutesSeconds} min</span>
+                </span>
+                <span className="px-2.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold rounded flex items-center gap-1">
+                  <FileText className="w-3 h-3 text-emerald-400" />
+                  <span>{totalWords} palabras</span>
+                </span>
+              </div>
+
+              <h2 className="text-lg font-extrabold text-slate-100 leading-snug">{topic}</h2>
+              <p className="text-xs text-slate-400">
+                Módulo de Doblaje Multivoz Sincronizado | Pista Principal + Mezclador Ambiental
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleGenerateCoverArt}
+              disabled={isGeneratingCover}
+              className="px-3 py-2 bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border border-indigo-800 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              {isGeneratingCover ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              )}
+              <span>{coverArt ? "Regenerar Portada" : "Generar Portada IA"}</span>
+            </button>
+
             <button
               onClick={handleExportMP3}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-all"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
             >
-              <Download className="w-4 h-4 text-amber-400" />
-              <span>Exportar a MP3 / Audio</span>
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span>Exportar MP3</span>
             </button>
 
             <button
               onClick={handleGenerateGeminiTTS}
               disabled={geminiAudioLoading}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-all"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
             >
               {geminiAudioLoading ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Sintetizando Voz Gemini TTS...
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Sintetizando...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  Generar Audio Gemini TTS HD
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  Audio Gemini TTS
                 </>
               )}
             </button>
@@ -609,6 +1022,431 @@ export function PodcastStudioView({
               <Radio className="w-3.5 h-3.5" /> Audio Oficial Generado con Gemini TTS HD
             </span>
             <audio src={geminiAudioUrl} controls className="w-full h-8" />
+          </div>
+        )}
+      </div>
+
+      {/* AMBIENT BACKGROUND TRACK SELECTION CARD */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Music className="w-4.5 h-4.5 text-emerald-400" />
+            <div>
+              <h4 className="text-sm font-bold text-slate-100">
+                Selección de Música de Fondo (Ambient Track Selection)
+              </h4>
+              <p className="text-xs text-slate-400">
+                Mezcla pistas musicales ambientales en segundo plano para acompañar la locución del podcast
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800 font-bold">
+            Pista Activa: {AMBIENT_MUSIC_TRACKS.find((t) => t.id === selectedAmbientTrack)?.label}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+              Pista Musical de Fondo
+            </label>
+            <select
+              value={selectedAmbientTrack}
+              onChange={(e) => {
+                setSelectedAmbientTrack(e.target.value);
+                const track = AMBIENT_MUSIC_TRACKS.find((t) => t.id === e.target.value);
+                addToast("Música Ambiental", `Pista seleccionada: ${track?.label || e.target.value}`, "info");
+              }}
+              className="w-full bg-slate-950 text-slate-100 border border-slate-700 text-xs rounded-lg px-3 py-2.5 outline-none focus:border-emerald-500 font-semibold cursor-pointer shadow-2xs"
+            >
+              {AMBIENT_MUSIC_TRACKS.map((track) => (
+                <option key={track.id} value={track.id}>
+                  {track.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+              Volumen de Fondo ({Math.round(ambientVolume * 100)}%)
+            </label>
+            <div className="flex items-center gap-2 pt-2">
+              <VolumeX className="w-4 h-4 text-slate-500 shrink-0" />
+              <input
+                type="range"
+                min="0"
+                max="0.5"
+                step="0.02"
+                value={ambientVolume}
+                onChange={(e) => setAmbientVolume(parseFloat(e.target.value))}
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
+              <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            </div>
+          </div>
+
+          <div className="flex items-center">
+            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 w-full text-xs text-slate-300">
+              <span className="text-[10px] font-mono font-bold text-emerald-400 block uppercase">Descripción de la Pista:</span>
+              <span className="text-slate-300 font-medium leading-snug">
+                {AMBIENT_MUSIC_TRACKS.find((t) => t.id === selectedAmbientTrack)?.desc || "Selecciona una textura de fondo."}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BATCH GEMINI TTS SYNTHESIS WITH PROGRESS BAR */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 p-5 rounded-xl border border-indigo-900/60 shadow-md space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-900/40 pb-3">
+          <div className="space-y-1">
+            <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+              Síntesis por Lote en Gemini TTS (Batch Episode Production)
+            </h3>
+            <p className="text-xs text-slate-300">
+              Sintetiza secuencialmente todas las líneas del guion mediante la API de Gemini TTS y proporciona una barra de progreso en tiempo real.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleBatchProcessTTS}
+            disabled={isBatchProcessingTTS}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-slate-950 font-extrabold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+          >
+            {isBatchProcessingTTS ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                <span>Procesando Lote ({batchProgress}%)...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 fill-slate-950" />
+                <span>Procesar Todo con Gemini TTS</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Progress Bar & Status Display during Batch Processing */}
+        {isBatchProcessingTTS && (
+          <div className="bg-slate-950 p-4 rounded-xl border border-indigo-800/80 space-y-3">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-amber-300 font-bold flex items-center gap-2">
+                <Radio className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                {batchStatusText}
+              </span>
+              <span className="text-emerald-400 font-extrabold text-sm">{batchProgress}%</span>
+            </div>
+
+            {/* Visual Progress Bar */}
+            <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden p-0.5 border border-slate-700">
+              <div
+                className="bg-gradient-to-r from-amber-500 via-emerald-400 to-indigo-500 h-full rounded-full transition-all duration-300 shadow-sm"
+                style={{ width: `${batchProgress}%` }}
+              />
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+              <span>Procesando línea {batchCurrentLine} de {lines.length}</span>
+              <span>API Gemini TTS | Muestra PCM 24kHz</span>
+            </div>
+          </div>
+        )}
+
+        {/* Master Episode Audio Player when batch processing finishes */}
+        {batchAudioObjectUrl && !isBatchProcessingTTS && (
+          <div className="bg-slate-950 p-4 rounded-xl border border-emerald-800/80 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-bold text-slate-100">
+                  Episodio Maestro Producido por Lote (Gemini TTS HD)
+                </span>
+                <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-800">
+                  ✨ Audio Consolidado
+                </span>
+              </div>
+
+              <a
+                href={batchAudioObjectUrl}
+                download={`Episodio_Maestro_${topic.replace(/\s+/g, "_")}.wav`}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Descargar Pista Completa (.wav)</span>
+              </a>
+            </div>
+
+            <audio
+              ref={batchAudioRef}
+              src={batchAudioObjectUrl}
+              controls
+              className="w-full h-10 accent-emerald-500"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* VOICE PROFILE MANAGEMENT (PERSISTED IN FIRESTORE) */}
+      <VoiceProfileManager />
+
+      {/* SMART PAUSE CONFIGURATION CARD */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4.5 h-4.5 text-amber-400" />
+            <div>
+              <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                Pausas Inteligentes según Emoción (Smart Pause Engine)
+                {smartPauseEnabled ? (
+                  <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 text-[10px] font-mono rounded border border-emerald-800">
+                    Activado
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-mono rounded border border-slate-700">
+                    Desactivado
+                  </span>
+                )}
+              </h4>
+              <p className="text-xs text-slate-400">
+                Inserta automáticamente duraciones de silencio personalizadas entre intervenciones según la emoción asignada
+              </p>
+            </div>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={smartPauseEnabled}
+              onChange={(e) => {
+                setSmartPauseEnabled(e.target.checked);
+                addToast(
+                  "Pausas Inteligentes",
+                  e.target.checked ? "Silencios emotivos activados." : "Silencios desactivados (pausa fija 300ms).",
+                  "info"
+                );
+              }}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+
+        {smartPauseEnabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <div>
+              <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Línea Neutra / Normal ({smartPauseDurations.neutral} ms)
+              </label>
+              <input
+                type="range"
+                min="100"
+                max="800"
+                step="50"
+                value={smartPauseDurations.neutral}
+                onChange={(e) =>
+                  setSmartPauseDurations((prev) => ({ ...prev, neutral: parseInt(e.target.value) }))
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+              <span className="text-[9px] text-slate-500 block mt-1">Fluidez estándar continua</span>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider mb-1">
+                Línea Entusiasta ({smartPauseDurations.enthusiastic} ms)
+              </label>
+              <input
+                type="range"
+                min="100"
+                max="600"
+                step="50"
+                value={smartPauseDurations.enthusiastic}
+                onChange={(e) =>
+                  setSmartPauseDurations((prev) => ({ ...prev, enthusiastic: parseInt(e.target.value) }))
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+              <span className="text-[9px] text-slate-500 block mt-1">Ritmo rápido y dinámico</span>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono font-bold text-red-400 uppercase tracking-wider mb-1">
+                Línea Alerta/Preocupada ({smartPauseDurations.concerned} ms)
+              </label>
+              <input
+                type="range"
+                min="300"
+                max="1500"
+                step="50"
+                value={smartPauseDurations.concerned}
+                onChange={(e) =>
+                  setSmartPauseDurations((prev) => ({ ...prev, concerned: parseInt(e.target.value) }))
+                }
+                className="w-full accent-red-500 cursor-pointer"
+              />
+              <span className="text-[9px] text-slate-500 block mt-1">Pausa dramática de énfasis</span>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider mb-1">
+                Línea Reflexiva ({smartPauseDurations.thoughtful} ms)
+              </label>
+              <input
+                type="range"
+                min="400"
+                max="2000"
+                step="100"
+                value={smartPauseDurations.thoughtful}
+                onChange={(e) =>
+                  setSmartPauseDurations((prev) => ({ ...prev, thoughtful: parseInt(e.target.value) }))
+                }
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
+              <span className="text-[9px] text-slate-500 block mt-1">Silencio contemplativo profundo</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* D3 NARRATIVE ARC CHART */}
+      <NarrativeArcChart scriptLines={lines} />
+
+      {/* GEMINI PODCAST HOSTING METADATA & SHOW NOTES GENERATOR */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4.5 h-4.5 text-indigo-400" />
+            <div>
+              <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                Generador de Metadatos de Hosting (Spotify & Apple Podcasts)
+                <span className="px-2 py-0.5 bg-indigo-950 text-indigo-300 text-[10px] font-mono rounded border border-indigo-800">
+                  Gemini AI 3.6
+                </span>
+              </h4>
+              <p className="text-xs text-slate-400">
+                Genera título SEO, resumen para Spotify/Apple Podcasts, notas del programa con marcas de tiempo y hashtags
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGenerateMetadata}
+            disabled={isGeneratingMetadata}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+          >
+            {isGeneratingMetadata ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Analizando Guion...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Generar Metadatos de Hosting</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Results view if metadata generated */}
+        {metadataResult && (
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4 text-xs">
+            {/* Title */}
+            <div className="space-y-1 bg-slate-900 p-3 rounded-lg border border-slate-800">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase">
+                  Título Sugerido para Plataformas
+                </span>
+                <button
+                  onClick={() => handleCopyText(metadataResult.title, "Título")}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedField === "Título" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedField === "Título" ? "¡Copiado!" : "Copiar Título"}</span>
+                </button>
+              </div>
+              <h3 className="text-sm font-extrabold text-slate-100">{metadataResult.title}</h3>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1 bg-slate-900 p-3 rounded-lg border border-slate-800">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase">
+                  Descripción Oficial (150-250 palabras)
+                </span>
+                <button
+                  onClick={() => handleCopyText(metadataResult.description, "Descripción")}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedField === "Descripción" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedField === "Descripción" ? "¡Copiado!" : "Copiar Descripción"}</span>
+                </button>
+              </div>
+              <p className="text-slate-300 leading-relaxed font-normal whitespace-pre-line">
+                {metadataResult.description}
+              </p>
+            </div>
+
+            {/* Show Notes / Timestamps */}
+            <div className="space-y-2 bg-slate-900 p-3 rounded-lg border border-slate-800">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
+                  Show Notes & Marcas de Tiempo (Capítulos)
+                </span>
+                <button
+                  onClick={() => {
+                    const notesText = metadataResult.showNotes
+                      .map((n: any) => `${n.timestamp} - ${n.title}: ${n.description}`)
+                      .join("\n");
+                    handleCopyText(notesText, "Show Notes");
+                  }}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedField === "Show Notes" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedField === "Show Notes" ? "¡Copiado!" : "Copiar Show Notes"}</span>
+                </button>
+              </div>
+
+              <div className="space-y-1.5 font-mono text-[11px]">
+                {metadataResult.showNotes?.map((note: any, idx: number) => (
+                  <div key={idx} className="flex gap-2 text-slate-300">
+                    <span className="text-emerald-400 font-bold shrink-0">[{note.timestamp}]</span>
+                    <span>
+                      <strong className="text-slate-100">{note.title}:</strong> {note.description}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Hashtags */}
+            <div className="space-y-1.5 bg-slate-900 p-3 rounded-lg border border-slate-800">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-mono font-bold text-sky-400 uppercase">
+                  Hashtags Recomendados
+                </span>
+                <button
+                  onClick={() => handleCopyText(metadataResult.hashtags?.join(" ") || "", "Hashtags")}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedField === "Hashtags" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedField === "Hashtags" ? "¡Copiado!" : "Copiar Hashtags"}</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {metadataResult.hashtags?.map((tag: string, i: number) => (
+                  <span key={i} className="px-2 py-0.5 bg-slate-950 text-sky-300 rounded font-mono text-[10px] border border-slate-800">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

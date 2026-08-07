@@ -4,6 +4,9 @@ import './globals.css'; // Global styles
 
 import { AuthProvider } from './AuthProvider';
 import { ToastProvider } from '@/components/Toast';
+import { GlobalErrorHandler } from '@/components/GlobalErrorHandler';
+import { SystemStatusProvider, SystemStatusBanner } from '@/components/SystemStatusBanner';
+import { DevHealthConsole } from '@/components/DevHealthConsole';
 
 export const viewport: Viewport = {
   themeColor: '#0f172a',
@@ -101,9 +104,14 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSchema) }}
         />
         <AuthProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
+          <SystemStatusProvider>
+            <GlobalErrorHandler />
+            <ToastProvider>
+              <SystemStatusBanner />
+              {children}
+              <DevHealthConsole />
+            </ToastProvider>
+          </SystemStatusProvider>
         </AuthProvider>
       </body>
     </html>

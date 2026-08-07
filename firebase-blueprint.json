@@ -34,6 +34,20 @@
         }
       },
       "required": ["id", "title", "status", "date"]
+    },
+    "VoiceProfile": {
+      "title": "Voice Profile",
+      "description": "Custom pitch, speed, warmth branding for Host, Expert, and Analyst voices",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["Host", "Expert", "Analyst"] },
+        "voiceName": { "type": "string", "maxLength": 100 },
+        "pitch": { "type": "number" },
+        "speed": { "type": "number" },
+        "warmth": { "type": "number" },
+        "updatedAt": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["role", "pitch", "speed", "warmth", "updatedAt"]
     }
   },
   "firestore": {
@@ -44,6 +58,10 @@
     "users/{userId}/history/{historyId}": {
       "schema": "PodcastHistory",
       "description": "History of generated podcasts"
+    },
+    "users/{userId}/voiceProfiles/{profileId}": {
+      "schema": "VoiceProfile",
+      "description": "Persisted voice profile settings for consistent branding"
     }
   }
 }

@@ -31,6 +31,7 @@ const STRATEGIES: Record<string, { query_modifier: string; default_min_reputatio
   "Noticia Tecnológica": { query_modifier: "noticia tecnología última hora reportes", default_min_reputation: 0.7 },
   "Espectáculos": { query_modifier: "espectáculos entretenimiento noticias", default_min_reputation: 0.6 },
   "Análisis de Producto": { query_modifier: "review análisis especificaciones pruebas", default_min_reputation: 0.5 },
+  "Movie Review": { query_modifier: "movie review", default_min_reputation: 0.6 },
   "General": { query_modifier: "informe noticias contexto", default_min_reputation: 0.5 },
 };
 

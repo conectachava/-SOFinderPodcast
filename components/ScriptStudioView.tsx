@@ -1,10 +1,161 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User, Sparkles, BarChart3, ChevronDown, ChevronUp, Quote, BookOpen, Link2, Plus, ExternalLink, X, Bookmark, ChevronRight, Maximize2, Minimize2, Eye, Search, SlidersHorizontal, Type } from "lucide-react";
+import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User, Sparkles, BarChart3, ChevronDown, ChevronUp, Quote, BookOpen, Link2, Plus, ExternalLink, X, Bookmark, ChevronRight, Maximize2, Minimize2, Eye, Search, SlidersHorizontal, Type, Smile, Shield, Zap, AlertCircle, CheckCircle2, HelpCircle, Square, Volume2 } from "lucide-react";
 import type { ScriptLine } from "@/app/api/script-writer/route";
+import { safeFetchJson } from "@/lib/utils";
+import {
+  parseRawScriptToLines,
+  reconstructRawScriptFromLines,
+  calculateEstimatedDurationFromLines,
+  splitLongScriptParagraphs,
+} from "@/lib/script-parser";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
+
+// Color-Coded Emotion Pill Component representing selected line emotion for Narrative Arc visual checks
+export function EmotionPill({ emotion, sentiment }: { emotion?: string; sentiment?: string }) {
+  const emotionLower = (emotion || sentiment || "neutral").toLowerCase();
+
+  if (
+    emotionLower.includes("happy") ||
+    emotionLower.includes("enthusiastic") ||
+    emotionLower.includes("entusiasta") ||
+    emotionLower.includes("emocionad") ||
+    emotionLower.includes("alegre")
+  ) {
+    return (
+      <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 text-[10px] font-bold font-mono inline-flex items-center gap-1 shadow-2xs">
+        <Smile className="w-3 h-3 text-emerald-400" />
+        <span>😊 Happy</span>
+      </span>
+    );
+  }
+
+  if (
+    emotionLower.includes("serious") ||
+    emotionLower.includes("serio") ||
+    emotionLower.includes("formal") ||
+    emotionLower.includes("analítico")
+  ) {
+    return (
+      <span className="px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-700/80 text-[10px] font-bold font-mono inline-flex items-center gap-1 shadow-2xs">
+        <Shield className="w-3 h-3 text-indigo-400" />
+        <span>🤔 Serious</span>
+      </span>
+    );
+  }
+
+  if (
+    emotionLower.includes("energetic") ||
+    emotionLower.includes("energétic") ||
+    emotionLower.includes("apasionad") ||
+    emotionLower.includes("intenso")
+  ) {
+    return (
+      <span className="px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-700/80 text-[10px] font-bold font-mono inline-flex items-center gap-1 shadow-2xs">
+        <Zap className="w-3 h-3 text-amber-400" />
+        <span>⚡ Energetic</span>
+      </span>
+    );
+  }
+
+  if (
+    emotionLower.includes("concerned") ||
+    emotionLower.includes("preocupad") ||
+    emotionLower.includes("crític") ||
+    emotionLower.includes("alerta") ||
+    emotionLower.includes("riesgo")
+  ) {
+    return (
+      <span className="px-2 py-0.5 rounded-full bg-rose-950/80 text-rose-300 border border-rose-700/80 text-[10px] font-bold font-mono inline-flex items-center gap-1 shadow-2xs">
+        <AlertCircle className="w-3 h-3 text-rose-400" />
+        <span>😟 Concerned</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold font-mono inline-flex items-center gap-1 shadow-2xs">
+      <HelpCircle className="w-3 h-3 text-slate-400" />
+      <span>😐 Neutral</span>
+    </span>
+  );
+}
+
+// Readability Analysis Tool for Conversational Podcast Flow
+export function analyzeLineReadability(text: string) {
+  if (!text) {
+    return { wordCount: 0, sentencesCount: 0, avgWordsPerSentence: 0, isComplex: false, isWarning: false, suggestion: "" };
+  }
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  const sentencesCount = Math.max(1, sentences.length);
+  const avgWordsPerSentence = Math.round(wordCount / sentencesCount);
+
+  const isComplex = wordCount > 24 || avgWordsPerSentence > 20;
+  const isWarning = !isComplex && (wordCount > 17 || avgWordsPerSentence > 15);
+
+  let suggestion = "";
+  if (isComplex) {
+    suggestion = `Esta línea tiene ${wordCount} palabras. Te sugerimos dividirlas en oraciones más cortas para mayor fluidez.`;
+  } else if (isWarning) {
+    suggestion = "Longitud moderada. Haz una pausa natural a la mitad al hablar.";
+  } else {
+    suggestion = "Ritmo conversational fluido y natural.";
+  }
+
+  return { wordCount, sentencesCount, avgWordsPerSentence, isComplex, isWarning, suggestion };
+}
+
+// Predefined Voice Profiles Library
+export const PREDEFINED_VOICE_PROFILES = [
+  {
+    id: "host_paul",
+    label: "🎙️ Host (Paul / Presentador)",
+    role: "host" as const,
+    speaker: "Paul",
+    gender: "Male" as const,
+    accent: "British",
+    voiceName: "Zephyr",
+    emotion: "Neutral",
+    sentiment: "neutral" as const,
+  },
+  {
+    id: "expert_elena",
+    label: "🎓 Expert (Dra. Elena / Experta)",
+    role: "caller" as const,
+    speaker: "Dra. Elena",
+    gender: "Female" as const,
+    accent: "American",
+    voiceName: "Kore",
+    emotion: "Serious",
+    sentiment: "neutral" as const,
+  },
+  {
+    id: "analyst_marcos",
+    label: "📊 Analyst (Marcos / Analista)",
+    role: "caller" as const,
+    speaker: "Marcos",
+    gender: "Male" as const,
+    accent: "International",
+    voiceName: "Fenrir",
+    emotion: "Energetic",
+    sentiment: "enthusiastic" as const,
+  },
+  {
+    id: "reporter_sarah",
+    label: "💬 Reporter (Sarah / Reportera)",
+    role: "caller" as const,
+    speaker: "Sarah",
+    gender: "Female" as const,
+    accent: "British",
+    voiceName: "Aoede",
+    emotion: "Happy",
+    sentiment: "enthusiastic" as const,
+  },
+];
 import {
   BarChart,
   Bar,
@@ -330,6 +481,19 @@ export function ScriptStudioView({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [collabMode, setCollabMode] = useState<boolean>(true);
+  const [isRawEditMode, setIsRawEditMode] = useState<boolean>(false);
+
+  // Sync handler for raw script textarea edits
+  const handleRawScriptChange = (newRawText: string) => {
+    setRawScript(newRawText);
+    const newParsedLines = parseRawScriptToLines(newRawText, hostName, callers);
+    setParsedLines(newParsedLines);
+    const durationStats = calculateEstimatedDurationFromLines(newParsedLines);
+    setStats({
+      wordCount: durationStats.wordCount,
+      estimatedDuration: durationStats.estimatedDurationFormatted,
+    });
+  };
 
   // AI Voice Profiles Catalog
   const AI_VOICE_PROFILES = [
@@ -352,16 +516,15 @@ export function ScriptStudioView({
     setIsRefining(true);
     addToast("Smart Refine (Gemini)", "Detectando y corrigiendo errores gramaticales e inconsistencias...", "info");
     try {
-      const res = await fetch("/api/script-refine", {
+      const response = await safeFetchJson("/api/script-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rawScript, lines: parsedLines }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Falló la refinación del guion");
+      if (!response.ok) {
+        throw new Error(response.error || "Falló la refinación del guion");
       }
-      const data = await res.json();
+      const data = response.data;
       setRawScript(data.rawScript);
       setParsedLines(data.lines || []);
       addToast(
@@ -370,6 +533,9 @@ export function ScriptStudioView({
         "success"
       );
     } catch (err: any) {
+      if (err?.name === "AbortError" || String(err?.message || "").toLowerCase().includes("abort")) {
+        return;
+      }
       addToast("Error Smart Refine", err.message || "Error al refinarse", "error");
     } finally {
       setIsRefining(false);
@@ -417,6 +583,184 @@ export function ScriptStudioView({
     );
     addToast("Edición Masiva", `Tono emocional actualizado a "${newSentiment}" en ${selectedLineIds.size} líneas.`, "success");
   };
+
+  // Single-Line TTS Preview State & Audio Reference
+  const [playingLineId, setPlayingLineId] = useState<string | null>(null);
+  const [loadingLineId, setLoadingLineId] = useState<string | null>(null);
+  const activeAudioRef = useRef<AudioBufferSourceNode | HTMLAudioElement | null>(null);
+
+  const stopAudioPreview = () => {
+    if (activeAudioRef.current) {
+      if ('stop' in activeAudioRef.current) {
+        try { (activeAudioRef.current as AudioBufferSourceNode).stop(); } catch {}
+      } else if ('pause' in activeAudioRef.current) {
+        try { (activeAudioRef.current as HTMLAudioElement).pause(); } catch {}
+      }
+      activeAudioRef.current = null;
+    }
+    setPlayingLineId(null);
+    setLoadingLineId(null);
+  };
+
+  const handlePlayLinePreview = async (line: ScriptLine & { voiceName?: string }) => {
+    if (playingLineId === line.id) {
+      stopAudioPreview();
+      return;
+    }
+    stopAudioPreview();
+    setLoadingLineId(line.id);
+
+    try {
+      const voiceName = line.voiceName || (line.speakerRole === "host" ? "Zephyr" : line.gender === "Female" ? "Kore" : "Fenrir");
+      const res = await safeFetchJson("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: line.text, voiceName }),
+      });
+
+      if (!res.ok || !res.data?.audioBase64) {
+        throw new Error(res.error || "Falló la generación de audio TTS preview");
+      }
+
+      const { audioBase64, mimeType = "audio/pcm" } = res.data;
+
+      if (mimeType.includes("wav") || mimeType.includes("mp3") || mimeType.includes("mpeg")) {
+        const audio = new Audio(`data:${mimeType};base64,${audioBase64}`);
+        activeAudioRef.current = audio;
+        audio.onended = () => { setPlayingLineId(null); activeAudioRef.current = null; };
+        audio.onerror = () => { setPlayingLineId(null); activeAudioRef.current = null; };
+        await audio.play();
+        setPlayingLineId(line.id);
+      } else {
+        const binaryString = window.atob(audioBase64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const int16Array = new Int16Array(bytes.buffer);
+        const float32Array = new Float32Array(int16Array.length);
+        for (let i = 0; i < int16Array.length; i++) {
+          float32Array[i] = int16Array[i] / 32768.0;
+        }
+
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const audioBuffer = audioCtx.createBuffer(1, float32Array.length, 24000);
+        audioBuffer.getChannelData(0).set(float32Array);
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.onended = () => { setPlayingLineId(null); activeAudioRef.current = null; };
+        source.start(0);
+        activeAudioRef.current = source;
+        setPlayingLineId(line.id);
+      }
+    } catch (err: any) {
+      addToast("Error Audio Preview", err?.message || "Error al previsualizar voz Gemini TTS", "error");
+      setPlayingLineId(null);
+    } finally {
+      setLoadingLineId(null);
+    }
+  };
+
+  const handleApplyProfileToLine = (lineId: string, profileId: string) => {
+    const prof = PREDEFINED_VOICE_PROFILES.find((p) => p.id === profileId);
+    if (!prof) return;
+    setParsedLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId
+          ? {
+              ...l,
+              speaker: prof.speaker,
+              speakerRole: prof.role,
+              gender: prof.gender,
+              accent: prof.accent,
+              emotion: prof.emotion,
+              sentiment: prof.sentiment,
+              voiceName: prof.voiceName,
+            }
+          : l
+      )
+    );
+    addToast("Perfil Asignado", `Perfil "${prof.label}" aplicado a la línea.`, "success");
+  };
+
+  const handleUpdateLineEmotion = (lineId: string, newEmotion: string) => {
+    let newSentiment: "neutral" | "enthusiastic" | "concerned" = "neutral";
+    const lower = newEmotion.toLowerCase();
+    if (lower.includes("happy") || lower.includes("energetic") || lower.includes("enthusiastic")) newSentiment = "enthusiastic";
+    if (lower.includes("concerned") || lower.includes("preocupad")) newSentiment = "concerned";
+
+    setParsedLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, emotion: newEmotion, sentiment: newSentiment } : l))
+    );
+    addToast("Emoción Actualizada", `Arco narrativo ajustado a "${newEmotion}".`, "info");
+  };
+
+  const handleSimplifyLineText = (lineId: string) => {
+    setParsedLines((prev) =>
+      prev.map((l) => {
+        if (l.id !== lineId) return l;
+        let text = l.text;
+        text = text.replace(/, consecuentemente, /gi, ". Por lo tanto, ");
+        text = text.replace(/, adicionalmente, /gi, ". Además, ");
+        text = text.replace(/que representa un avance fundamental/gi, "que es un avance clave");
+        text = text.replace(/invariablemente/gi, "siempre");
+        return { ...l, text };
+      })
+    );
+    addToast("Flujo Conversacional", "Línea adaptada para locución en vivo.", "success");
+  };
+
+  const handleSplitLongParagraphs = () => {
+    if (!parsedLines || parsedLines.length === 0) return;
+    const originalCount = parsedLines.length;
+    const splitLines = splitLongScriptParagraphs(parsedLines, 18);
+    if (splitLines.length === originalCount) {
+      addToast(
+        "División de Párrafos",
+        "Todas las líneas ya tienen una longitud breve ideal para la síntesis TTS.",
+        "info"
+      );
+      return;
+    }
+    setParsedLines(splitLines);
+    const durationStats = calculateEstimatedDurationFromLines(splitLines);
+    setStats({
+      wordCount: durationStats.wordCount,
+      estimatedDuration: durationStats.estimatedDurationFormatted,
+    });
+    addToast(
+      "Párrafos Divididos para TTS",
+      `Párrafos extensos fragmentados de ${originalCount} a ${splitLines.length} líneas breves según signos de puntuación.`,
+      "success"
+    );
+  };
+
+  // Readability Overview Calculation for entire script
+  const readabilityOverview = React.useMemo(() => {
+    if (!parsedLines || parsedLines.length === 0) {
+      return { totalLines: 0, complexCount: 0, warningCount: 0, avgWords: 0 };
+    }
+    let totalWords = 0;
+    let complex = 0;
+    let warning = 0;
+
+    parsedLines.forEach((l) => {
+      const res = analyzeLineReadability(l.text);
+      totalWords += res.wordCount;
+      if (res.isComplex) complex++;
+      else if (res.isWarning) warning++;
+    });
+
+    return {
+      totalLines: parsedLines.length,
+      complexCount: complex,
+      warningCount: warning,
+      avgWords: Math.round(totalWords / parsedLines.length),
+    };
+  }, [parsedLines]);
 
   // Cite Source Floating Modal & Parsing State
   const [isCiteModalOpen, setIsCiteModalOpen] = useState(false);
@@ -624,7 +968,7 @@ export function ScriptStudioView({
     addToast("Redactando Guion", "Creando diálogo radiofónico multivoz...", "info");
 
     try {
-      const res = await fetch("/api/script-writer", {
+      const response = await safeFetchJson("/api/script-writer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -636,12 +980,11 @@ export function ScriptStudioView({
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Falló la generación del guion");
+      if (!response.ok) {
+        throw new Error(response.error || "Falló la generación del guion");
       }
 
-      const data = await res.json();
+      const data = response.data;
       setRawScript(data.rawScript);
       setParsedLines(data.lines || []);
       pushHistory(data.rawScript, data.lines || []);
@@ -652,6 +995,9 @@ export function ScriptStudioView({
 
       addToast("Guion Generado", `Guion de ${data.wordCount} palabras redactado exitosamente.`, "success");
     } catch (err: any) {
+      if (err?.name === "AbortError" || String(err?.message || "").toLowerCase().includes("abort")) {
+        return;
+      }
       const msg = err.message || "Error al comunicarse con el servicio Guionista v2.0";
       setError(msg);
       addToast("Error en Guionista", msg, "error");
@@ -1366,6 +1712,32 @@ export function ScriptStudioView({
                   </span>
                 )}
 
+                {/* Secondary Raw Script Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsRawEditMode(!isRawEditMode)}
+                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border ${
+                    isRawEditMode
+                      ? "bg-amber-500 text-slate-950 border-amber-400 font-extrabold"
+                      : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                  }`}
+                  title="Alternar entre edición de texto raw continuo y componentes ScriptLine individuales"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>{isRawEditMode ? "Modo Líneas" : "Editar Texto Raw"}</span>
+                </button>
+
+                {/* Split Long Paragraphs Utility Button for TTS */}
+                <button
+                  type="button"
+                  onClick={handleSplitLongParagraphs}
+                  className="px-2.5 py-1 bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 rounded text-xs font-bold flex items-center gap-1.5 transition-colors border border-emerald-700/80 cursor-pointer shadow-2xs"
+                  title="Dividir párrafos largos en líneas de guion más cortas según puntuación para optimizar el TTS de Gemini"
+                >
+                  <Type className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Dividir Párrafos (TTS)</span>
+                </button>
+
                 {/* Smart Refine Button (Gemini AI) */}
                 <button
                   onClick={handleSmartRefineScript}
@@ -1507,77 +1879,259 @@ export function ScriptStudioView({
               </div>
             )}
 
-            {/* Dark Terminal Styled Lines matching Design HTML */}
-            <div className="p-6 font-mono text-xs leading-loose max-h-[500px] overflow-y-auto space-y-4">
-              {loading && parsedLines.length === 0 && (
-                <div className="p-8 space-y-4 animate-pulse">
-                  <div className="h-5 bg-slate-800 rounded w-1/3"></div>
-                  <div className="h-20 bg-slate-800/60 rounded"></div>
-                  <div className="h-20 bg-slate-800/60 rounded"></div>
+            {/* Dark Terminal Styled Lines or Raw Textarea Editor */}
+            {isRawEditMode ? (
+              <div className="p-6 space-y-3 bg-slate-950 border-t border-slate-800">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-mono text-amber-400 font-bold flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-amber-400" />
+                    Editor de Texto Raw del Guion (Sincronización Automática con Líneas)
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    Sincronización en vivo con {parsedLines.length} componentes ScriptLine
+                  </span>
                 </div>
-              )}
-              {parsedLines.map((line, idx) => {
-                const isSelected = selectedLineIds.has(line.id);
 
-                return (
-                  <div
-                    key={line.id}
-                    className={`p-3 rounded border relative transition-all ${
-                      isSelected
-                        ? "bg-slate-900 border-amber-500/80 shadow-md"
-                        : "bg-slate-950/60 border-slate-800/80"
-                    }`}
-                  >
-                    {collabMode && idx === 1 && (
-                      <div className="absolute -top-2.5 right-4 bg-emerald-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1 animate-bounce">
-                        <span>✏️ Ana editando aquí</span>
-                      </div>
-                    )}
-                    {collabMode && idx === 3 && (
-                      <div className="absolute -top-2.5 right-4 bg-amber-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1">
-                        <span>👁️ Carlos viendo</span>
-                      </div>
-                    )}
+                <textarea
+                  value={rawScript || ""}
+                  onChange={(e) => handleRawScriptChange(e.target.value)}
+                  rows={18}
+                  className="w-full p-4 bg-slate-900 border border-slate-800 rounded-xl font-mono text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-y leading-relaxed shadow-inner"
+                  placeholder="Escribe o edita aquí el texto raw completo del guion..."
+                  spellCheck={false}
+                />
 
-                    <div className="flex items-center justify-between text-[11px] mb-1.5 flex-wrap gap-1">
-                      <div className="flex items-center gap-2.5">
-                        {/* LINE SELECTION CHECKBOX FOR BULK ACTIONS */}
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectLine(line.id)}
-                          className="w-3.5 h-3.5 rounded border-slate-700 accent-amber-500 cursor-pointer"
-                          title="Seleccionar para edición masiva"
-                        />
-                        <span className="font-bold text-pink-400">{line.speaker}:</span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-mono ${
-                            line.speakerRole === "host"
-                              ? "bg-pink-950/80 text-pink-300 border border-pink-800"
-                              : "bg-emerald-950/80 text-emerald-300 border border-emerald-800"
-                          }`}
-                        >
-                          {line.speakerRole}
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1">
+                  <span>
+                    Palabras: <strong className="text-amber-400">{stats?.wordCount || 0}</strong>
+                  </span>
+                  <span>
+                    Duración Estimada: <strong className="text-emerald-400">{stats?.estimatedDuration || "0:00 min"}</strong>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 font-mono text-xs leading-loose max-h-[580px] overflow-y-auto space-y-4">
+                {/* Readability & Narrative Arc Overview Panel */}
+                {parsedLines.length > 0 && (
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3 mb-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-emerald-400" />
+                        <h5 className="text-xs font-bold text-slate-100">
+                          Herramienta de Análisis de Legibilidad & Flujo Conversacional
+                        </h5>
+                      </div>
+
+                      <div className="flex items-center gap-3 font-mono text-[10px]">
+                        <span className="text-slate-400">
+                          Líneas: <strong className="text-slate-200">{readabilityOverview.totalLines}</strong>
                         </span>
-                        <SentimentBadge sentiment={line.sentiment} text={line.text} size="sm" />
-                      </div>
-
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                        <span>{line.gender}</span>
-                        <span>|</span>
-                        <span className="text-emerald-400">{line.accent}</span>
-                        <span>|</span>
-                        <span className="text-slate-400">{line.timestamp}</span>
+                        <span className="text-slate-400">
+                          Prom. Palabras: <strong className="text-slate-200">{readabilityOverview.avgWords} p/línea</strong>
+                        </span>
+                        {readabilityOverview.complexCount > 0 ? (
+                          <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold">
+                            ⚠️ {readabilityOverview.complexCount} líneas complejas
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                            ✨ 100% Ritmo Conversacional
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <p className="text-slate-200 font-serif leading-relaxed pl-6 border-l-2 border-slate-800">
-                      {line.text}
-                    </p>
+                    {/* Visual Narrative Arc Timeline Bar */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                        Arco Narrativo del Episodio (Secuencia Visual de Emociones)
+                      </span>
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5">
+                        {parsedLines.map((l, idx) => (
+                          <div key={l.id || idx} className="shrink-0 flex items-center gap-1">
+                            <span className="text-[9px] text-slate-500 font-mono">#{idx + 1}</span>
+                            <EmotionPill emotion={l.emotion} sentiment={l.sentiment} />
+                            {idx < parsedLines.length - 1 && <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
+
+                {loading && parsedLines.length === 0 && (
+                  <div className="p-8 space-y-4 animate-pulse">
+                    <div className="h-5 bg-slate-800 rounded w-1/3"></div>
+                    <div className="h-20 bg-slate-800/60 rounded"></div>
+                    <div className="h-20 bg-slate-800/60 rounded"></div>
+                  </div>
+                )}
+
+                {parsedLines.map((line, idx) => {
+                  const isSelected = selectedLineIds.has(line.id);
+                  const readability = analyzeLineReadability(line.text);
+
+                  return (
+                    <div
+                      key={line.id}
+                      className={`p-3.5 rounded-xl border relative transition-all space-y-2.5 ${
+                        isSelected
+                          ? "bg-slate-900 border-amber-500/80 shadow-md"
+                          : "bg-slate-950/70 border-slate-800/80 hover:border-slate-700"
+                      }`}
+                    >
+                      {collabMode && idx === 1 && (
+                        <div className="absolute -top-2.5 right-4 bg-emerald-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1 animate-bounce">
+                          <span>✏️ Ana editando aquí</span>
+                        </div>
+                      )}
+                      {collabMode && idx === 3 && (
+                        <div className="absolute -top-2.5 right-4 bg-amber-500 text-slate-950 font-bold text-[9px] px-2 py-0.2 rounded-full shadow-md flex items-center gap-1">
+                          <span>👁️ Carlos viendo</span>
+                        </div>
+                      )}
+
+                      {/* Top Controls Row */}
+                      <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* LINE SELECTION CHECKBOX FOR BULK ACTIONS */}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectLine(line.id)}
+                            className="w-3.5 h-3.5 rounded border-slate-700 accent-amber-500 cursor-pointer"
+                            title="Seleccionar para edición masiva"
+                          />
+
+                          <span className="font-bold text-pink-400">{line.speaker}:</span>
+
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-mono ${
+                              line.speakerRole === "host"
+                                ? "bg-pink-950/80 text-pink-300 border border-pink-800"
+                                : "bg-emerald-950/80 text-emerald-300 border border-emerald-800"
+                            }`}
+                          >
+                            {line.speakerRole}
+                          </span>
+
+                          {/* COLOR-CODED EMOTION PILL INDICATOR FOR NARRATIVE ARC VISUAL CHECK */}
+                          <EmotionPill emotion={line.emotion} sentiment={line.sentiment} />
+
+                          {/* QUICK EMOTION SELECTOR DROPDOWN */}
+                          <select
+                            value={line.emotion || (line.sentiment === "enthusiastic" ? "Happy" : line.sentiment === "concerned" ? "Concerned" : "Neutral")}
+                            onChange={(e) => handleUpdateLineEmotion(line.id, e.target.value)}
+                            className="bg-slate-900 text-slate-300 border border-slate-700/80 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-amber-500 cursor-pointer font-mono"
+                            title="Ajustar emoción de la línea para el arco narrativo"
+                          >
+                            <option value="Happy">😊 Happy</option>
+                            <option value="Serious">🤔 Serious</option>
+                            <option value="Energetic">⚡ Energetic</option>
+                            <option value="Concerned">😟 Concerned</option>
+                            <option value="Neutral">😐 Neutral</option>
+                          </select>
+
+                          {/* PREDEFINED VOICE PROFILES DROPDOWN MENU */}
+                          <select
+                            defaultValue=""
+                            onChange={(e) => {
+                              if (e.target.value) handleApplyProfileToLine(line.id, e.target.value);
+                              e.target.value = "";
+                            }}
+                            className="bg-indigo-950/90 text-indigo-200 border border-indigo-800/80 text-[10px] rounded px-1.5 py-0.5 outline-none font-mono cursor-pointer"
+                            title="Asignar perfil de voz predefinido (Host, Expert, Analyst, Reporter)"
+                          >
+                            <option value="" disabled>
+                              🎭 Perfil Vocacional...
+                            </option>
+                            {PREDEFINED_VOICE_PROFILES.map((prof) => (
+                              <option key={prof.id} value={prof.id}>
+                                {prof.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                          <span>{line.gender || "Male"}</span>
+                          <span>|</span>
+                          <span className="text-emerald-400">{line.accent || "Acento Standard"}</span>
+                          <span>|</span>
+                          <span className="text-slate-400">{line.timestamp}</span>
+                        </div>
+                      </div>
+
+                      {/* Script Line Text */}
+                      <p className="text-slate-200 font-serif leading-relaxed pl-4 border-l-2 border-slate-800 text-xs sm:text-sm">
+                        {line.text}
+                      </p>
+
+                      {/* Bottom Actions Row: Readability Analysis Flag & Gemini TTS Single-Line Preview */}
+                      <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-slate-800/60 flex-wrap gap-2">
+                        {/* Readability Indicator */}
+                        <div className="flex items-center gap-2">
+                          {readability.isComplex ? (
+                            <div className="flex items-center gap-1.5 bg-rose-950/80 text-rose-300 border border-rose-800/80 px-2 py-0.5 rounded">
+                              <AlertCircle className="w-3 h-3 text-rose-400" />
+                              <span>⚠️ Oración Compleja ({readability.wordCount} p)</span>
+                              <button
+                                type="button"
+                                onClick={() => handleSimplifyLineText(line.id)}
+                                className="ml-1 text-[9px] bg-rose-900 hover:bg-rose-800 text-white font-bold px-1.5 py-0.2 rounded underline cursor-pointer"
+                                title="Simplificar oración para mejor flujo de locución"
+                              >
+                                💡 Simplificar
+                              </button>
+                            </div>
+                          ) : readability.isWarning ? (
+                            <span className="flex items-center gap-1 bg-amber-950/80 text-amber-300 border border-amber-800/80 px-2 py-0.5 rounded">
+                              <span>⚡ Moderadamente Densa ({readability.wordCount} p)</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 bg-emerald-950/60 text-emerald-400 border border-emerald-900/60 px-2 py-0.5 rounded">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              <span>🟢 Flujo Óptimo ({readability.wordCount} p)</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Single-line Gemini TTS Preview Button */}
+                        <button
+                          type="button"
+                          onClick={() => handlePlayLinePreview(line)}
+                          disabled={loadingLineId === line.id}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                            playingLineId === line.id
+                              ? "bg-rose-950 text-rose-300 border-rose-700 animate-pulse shadow-md"
+                              : "bg-slate-900 hover:bg-slate-800 text-amber-300 border-slate-700 hover:border-amber-500/50 shadow-xs"
+                          }`}
+                          title="Sintetizar y previsualizar voz IA de esta línea individual con Gemini TTS"
+                        >
+                          {loadingLineId === line.id ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                              <span>Sintetizando...</span>
+                            </>
+                          ) : playingLineId === line.id ? (
+                            <>
+                              <Square className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
+                              <span>Detener Voz</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                              <span>Previsualizar Voz IA</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-12 text-center text-slate-500 space-y-3">

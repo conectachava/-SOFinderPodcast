@@ -22,9 +22,9 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
 
     // 2. Limpiar IndexedDB de Firestore y Firebase Auth local storage
     if (typeof window !== "undefined" && window.indexedDB) {
-      if (indexedDB.databases) {
-        try {
-          const dbs = await indexedDB.databases();
+      try {
+        if (indexedDB.databases) {
+          const dbs = await indexedDB.databases().catch(() => []);
           for (const dbInfo of dbs) {
             if (
               dbInfo.name &&
@@ -32,26 +32,28 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
                dbInfo.name.toLowerCase().includes("firestore") ||
                dbInfo.name.toLowerCase().includes("firebaselocalstorage"))
             ) {
-              indexedDB.deleteDatabase(dbInfo.name);
+              try {
+                indexedDB.deleteDatabase(dbInfo.name);
+              } catch (e) {}
             }
           }
-        } catch (e) {
-          console.warn("[clearFirestoreAuthCache] Error al listar IndexedDBs:", e);
         }
-      }
 
-      // Borrado explícito de bases conocidas de Firebase/Firestore
-      const knownDBs = [
-        "firebaseLocalStorageDb",
-        "firestore/[DEFAULT]/[DEFAULT]/main",
-        "firestore/[DEFAULT]",
-        "firebase-heartbeat-database",
-        "firebase-installations-database",
-      ];
-      for (const dbName of knownDBs) {
-        try {
-          indexedDB.deleteDatabase(dbName);
-        } catch (e) {}
+        // Borrado explícito de bases conocidas de Firebase/Firestore
+        const knownDBs = [
+          "firebaseLocalStorageDb",
+          "firestore/[DEFAULT]/[DEFAULT]/main",
+          "firestore/[DEFAULT]",
+          "firebase-heartbeat-database",
+          "firebase-installations-database",
+        ];
+        for (const dbName of knownDBs) {
+          try {
+            indexedDB.deleteDatabase(dbName);
+          } catch (e) {}
+        }
+      } catch (idbErr) {
+        console.warn("[clearFirestoreAuthCache] IndexedDB notice:", idbErr);
       }
     }
 
@@ -59,20 +61,26 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
     if (typeof window !== "undefined") {
       try {
         const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (
-            key &&
-            (key.toLowerCase().includes("firebase") ||
-             key.toLowerCase().includes("firestore") ||
-             key.toLowerCase().includes("auth") ||
-             key.startsWith("sf_auth"))
-          ) {
-            keysToRemove.push(key);
+        if (window.localStorage) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (
+              key &&
+              (key.toLowerCase().includes("firebase") ||
+               key.toLowerCase().includes("firestore") ||
+               key.toLowerCase().includes("auth") ||
+               key.startsWith("sf_auth"))
+            ) {
+              keysToRemove.push(key);
+            }
           }
+          keysToRemove.forEach((k) => {
+            try { localStorage.removeItem(k); } catch (e) {}
+          });
         }
-        keysToRemove.forEach((k) => localStorage.removeItem(k));
-        sessionStorage.clear();
+        if (window.sessionStorage) {
+          try { sessionStorage.clear(); } catch (e) {}
+        }
       } catch (e) {
         console.warn("[clearFirestoreAuthCache] Error al limpiar Storage:", e);
       }
@@ -81,8 +89,46 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
     console.log("[clearFirestoreAuthCache] Caché de Firestore y Autenticación eliminada con éxito.");
     return true;
   } catch (error) {
-    console.error("[clearFirestoreAuthCache] Error inesperado:", error);
+    console.warn("[clearFirestoreAuthCache] Error prevenido:", error);
     return false;
+  }
+}
+
+/**
+ * Operación de escritura atómica en Firestore con manejo robusto de errores y registro de eventos
+ */
+export async function safeSetDoc(docRef: any, data: any, options?: any) {
+  const { setDoc } = await import("firebase/firestore");
+  const { logger } = await import("./logger");
+  try {
+    const res = await setDoc(docRef, data, options);
+    logger.info(`[FS_WRITE_SUCCESS] Escritura en Firestore confirmada en '${docRef?.path || "documento"}'`, { path: docRef?.path }, "Firestore");
+    return res;
+  } catch (err: any) {
+    logger.error(`[FS_SAVE_FAIL] Error al guardar documento en Firestore (${docRef?.path || "doc"}): ${err.message}`, {
+      path: docRef?.path,
+      error: err.message,
+    }, "Firestore");
+    throw err;
+  }
+}
+
+/**
+ * Operación de lectura segura en Firestore
+ */
+export async function safeGetDoc(docRef: any) {
+  const { getDoc } = await import("firebase/firestore");
+  const { logger } = await import("./logger");
+  try {
+    const docSnap = await getDoc(docRef);
+    logger.info(`[FS_READ_SUCCESS] Lectura de Firestore completada en '${docRef?.path || "documento"}'`, { path: docRef?.path, exists: docSnap.exists() }, "Firestore");
+    return docSnap;
+  } catch (err: any) {
+    logger.error(`[FS_SYNC_FAIL] Error de sincronización al leer Firestore (${docRef?.path || "doc"}): ${err.message}`, {
+      path: docRef?.path,
+      error: err.message,
+    }, "Firestore");
+    throw err;
   }
 }
 
