@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -98,7 +98,6 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
  * Operación de escritura atómica en Firestore con manejo robusto de errores y registro de eventos
  */
 export async function safeSetDoc(docRef: any, data: any, options?: any) {
-  const { setDoc } = await import("firebase/firestore");
   const { logger } = await import("./logger");
   try {
     const res = await setDoc(docRef, data, options);
@@ -117,7 +116,6 @@ export async function safeSetDoc(docRef: any, data: any, options?: any) {
  * Operación de lectura segura en Firestore
  */
 export async function safeGetDoc(docRef: any) {
-  const { getDoc } = await import("firebase/firestore");
   const { logger } = await import("./logger");
   try {
     const docSnap = await getDoc(docRef);
