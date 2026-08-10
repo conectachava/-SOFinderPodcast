@@ -12,3 +12,4 @@ firebase-applet-config
 *.pyc
 __pycache__/
 firebase-applet-config.json
+.env.example
