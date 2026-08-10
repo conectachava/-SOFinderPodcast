@@ -1,7 +1,17 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import rawFirebaseConfig from '../firebase-applet-config.json';
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || rawFirebaseConfig.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || rawFirebaseConfig.authDomain,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || rawFirebaseConfig.projectId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || rawFirebaseConfig.storageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || rawFirebaseConfig.messagingSenderId,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || rawFirebaseConfig.appId,
+  firestoreDatabaseId: (rawFirebaseConfig as any).firestoreDatabaseId
+};
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
