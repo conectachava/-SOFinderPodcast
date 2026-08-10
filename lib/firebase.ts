@@ -1,7 +1,12 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
-import rawFirebaseConfig from '../firebase-applet-config.json';
+let rawFirebaseConfig: Record<string, any> = {};
+try {
+  rawFirebaseConfig = require('../firebase-applet-config.json');
+} catch (e) {
+  // Config file may be omitted in production or provided purely via env variables
+}
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || rawFirebaseConfig.apiKey,

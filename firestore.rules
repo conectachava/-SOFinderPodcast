@@ -58,10 +58,13 @@ service cloud.firestore {
     }
 
     function isValidDraft(data) {
-      return data.keys().hasAll(['topic', 'updatedAt'])
-        && data.keys().size() <= 6
-        && data.topic is string && data.topic.size() <= 500
+      return data.keys().hasAll(['updatedAt'])
+        && data.keys().size() <= 10
+        && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
         && ( !('scriptText' in data) || (data.scriptText is string && data.scriptText.size() <= 100000) )
+        && ( !('reportText' in data) || (data.reportText is string && data.reportText.size() <= 100000) )
+        && ( !('rawScript' in data) || (data.rawScript is string && data.rawScript.size() <= 100000) )
+        && ( !('scriptLines' in data) || (data.scriptLines is list) )
         && ( !('format' in data) || (data.format is string && data.format.size() <= 100) )
         && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 200) );
     }
