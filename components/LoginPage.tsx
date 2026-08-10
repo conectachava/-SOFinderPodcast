@@ -259,7 +259,7 @@ export function LoginPage({ onBypassGuest }: LoginPageProps) {
             className="px-3.5 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <Calculator className="w-3.5 h-3.5 text-amber-400" />
-            <span>{showLandingModal ? "Volver al Login" : "Ver Dolor, Solución y Planes"}</span>
+            <span>{showLandingModal ? "Volver al Login" : "Ver Desafíos, Soluciones y Planes"}</span>
           </button>
           
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800">

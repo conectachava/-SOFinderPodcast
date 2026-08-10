@@ -71,7 +71,7 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
             }`}
           >
             <AlertTriangle className={`w-4 h-4 ${activeTab === "pain" ? "text-white" : "text-[#ea4335]"}`} />
-            <span>Dolor vs Solución</span>
+            <span>Desafíos & Soluciones</span>
           </button>
 
           <button
@@ -115,18 +115,18 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
         {activeTab === "pain" && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Pain 1 */}
+              {/* Challenge 1 */}
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#ea4335]"></div>
                 <div className="flex items-center justify-between">
                   <span className="px-2.5 py-1 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-[#ea4335] dark:text-red-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Dolor #1: Alucinaciones & Fake News
+                    Desafío #1: Alucinaciones & Fake News
                   </span>
-                  <span className="text-xs text-slate-500 font-mono">Pérdida: 8+ horas</span>
+                  <span className="text-xs text-slate-500 font-mono">Ahorro: 8+ horas</span>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Miedo a publicar datos erróneos o citar fuentes inventadas</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Riesgo de publicar datos sin verificar o fuentes no confiables</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Las IAs convencionales inventan estadísticas y hechos. El creador pierde días verificando datos manualmente en múltiples pestañas del navegador.
+                  Las IAs convencionales pueden generar estadísticas no confirmadas. La verificación manual consume tiempo valioso navegando múltiples sitios.
                 </p>
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex items-start gap-2.5 text-slate-800 dark:text-slate-200 text-xs font-medium">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#34a853]" />
@@ -137,18 +137,18 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
                 </div>
               </div>
 
-              {/* Pain 2 */}
+              {/* Challenge 2 */}
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#fbbc04]"></div>
                 <div className="flex items-center justify-between">
                   <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Dolor #2: Guiones Monótonos
+                    Desafío #2: Guiones Monótonos
                   </span>
-                  <span className="text-xs text-slate-500 font-mono">Pérdida: Retención & Audiencia</span>
+                  <span className="text-xs text-slate-500 font-mono">Objetivo: Máxima Retención</span>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Monólogos aburridos sin estructura dramática ni dinamismo</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Narrativas lineales sin estructura dramática ni dinamismo</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Los textos redactados con prompts básicos carecen de ganchos iniciales, cambios de ritmo o la interacción natural entre moderador y analista.
+                  Los textos redactados de forma simple carecen de ganchos iniciales, matices emocionales o interacción fluida entre locutores.
                 </p>
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex items-start gap-2.5 text-slate-800 dark:text-slate-200 text-xs font-medium">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#34a853]" />
@@ -159,18 +159,18 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
                 </div>
               </div>
 
-              {/* Pain 3 */}
+              {/* Challenge 3 */}
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a73e8]"></div>
                 <div className="flex items-center justify-between">
                   <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[#1a73e8] dark:text-blue-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Dolor #3: Caos de Herramientas
+                    Desafío #3: Dispersión de Herramientas
                   </span>
-                  <span className="text-xs text-slate-500 font-mono">Pérdida: Fricción & Errores</span>
+                  <span className="text-xs text-slate-500 font-mono">Beneficio: Flujo Unificado</span>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Saltar entre 5 aplicaciones distintas para completar un episodio</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Diversas plataformas desconectadas para completar un episodio</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Investigar en Notion, convertir texto en ElevenLabs, editar en Descript, masterizar en Auphonic y hacer gráficos en Canva consume todo tu tiempo creativo.
+                  Alternar entre diferentes herramientas para investigar, redactar, sintetizar voz, editar y diseñar genera fricción en el proceso creativo.
                 </p>
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex items-start gap-2.5 text-slate-800 dark:text-slate-200 text-xs font-medium">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#34a853]" />
@@ -181,24 +181,24 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
                 </div>
               </div>
 
-              {/* Pain 4 */}
+              {/* Challenge 4 */}
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#34a853]"></div>
                 <div className="flex items-center justify-between">
                   <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Dolor #4: Costos Inasumibles
+                    Desafío #4: Costos Elevados
                   </span>
-                  <span className="text-xs text-slate-500 font-mono">Pérdida: $1,200+/mes</span>
+                  <span className="text-xs text-slate-500 font-mono">Ahorro: Hasta 92%</span>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Presupuestos elevados para contratar editores y redactores</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Altas inversiones requeridas en producción tradicional</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Un estudio de grabación tradicional cobra $250 a $500 dólares por episodio entre investigación, edición y masterización.
+                  Los estudios tradicionales involucran costos significativos por hora de edición, masterización y contratación de servicios externos.
                 </p>
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex items-start gap-2.5 text-slate-800 dark:text-slate-200 text-xs font-medium">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#34a853]" />
                   <div>
                     <strong className="text-[#34a853] font-bold">Solución SourceFinder: </strong>
-                    Automatización completa en la nube impulsada por Gemini 2.0 que reduce los costos de producción hasta en un 92%.
+                    Automatización completa en la nube impulsada por Gemini 2.0 que optimiza los costos de producción con la máxima eficiencia.
                   </div>
                 </div>
               </div>
