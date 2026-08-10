@@ -2,11 +2,11 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database, Sparkles, Home } from "lucide-react";
+import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database, Sparkles, Home, BarChart3 } from "lucide-react";
 import { UserProfile } from "./UserProfileModal";
 import { useAuth } from "../app/AuthProvider";
 
-export type TabType = "landing" | "orchestrator" | "sourcefinder" | "script" | "studio" | "storyboard" | "docs";
+export type TabType = "landing" | "orchestrator" | "sourcefinder" | "script" | "studio" | "storyboard" | "analytics" | "docs";
 
 interface HeaderProps {
   activeTab: TabType;
@@ -404,6 +404,18 @@ export function Header({
           >
             <Radio className="w-3.5 h-3.5 text-amber-300" />
             Storyboard Video (Flow)
+          </button>
+
+          <button
+            onClick={() => setActiveTab("analytics")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded transition-colors whitespace-nowrap ${
+              activeTab === "analytics"
+                ? "bg-[#1a73e8] text-white font-semibold shadow-xs"
+                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
+            Métricas &amp; Retención
           </button>
 
           <button

@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { History, Play, Trash2, X, Sparkles, Clock, CheckSquare, Square, Volume2, Tag, Search, Filter } from "lucide-react";
+import { History, Play, Trash2, X, Sparkles, Clock, CheckSquare, Square, Volume2, Tag, Search, Filter, Wand2 } from "lucide-react";
 import { useToast } from "./Toast";
+import { generateAutoTags, CATEGORY_TAGS } from "@/lib/ai-tagger";
 
 export interface PodcastHistoryItem {
   id: string;
@@ -42,17 +43,38 @@ export function RecentDrawer({
 
   if (!isOpen) return null;
 
-  // Extract all unique tags from history items
-  const allUniqueTags = Array.from(
+  // Helper to ensure every podcast has AI-generated tags
+  const getItemTags = (item: PodcastHistoryItem): string[] => {
+    if (item.tags && item.tags.length > 0) return item.tags;
+    return generateAutoTags(item.topic, item.contentType, item.reportText || item.rawScript || item.reportSnippet || "");
+  };
+
+  // Extract all unique tags from history items, ensuring standard categories like Tecnología, Finanzas, Ciencia appear if relevant
+  const historyTags = Array.from(
     new Set(
-      history.flatMap((item) => item.tags || []).filter((t) => Boolean(t && t.trim()))
+      history.flatMap((item) => getItemTags(item)).filter((t) => Boolean(t && t.trim()))
     )
+  );
+
+  // Combine standard category tags with any custom tags present in history
+  const allCategoryTags = Array.from(
+    new Set([
+      "Tecnología",
+      "Finanzas",
+      "Ciencia",
+      "Educación",
+      "Negocios",
+      "IA",
+      ...historyTags,
+    ])
   );
 
   // Semantic keyword filtering logic across topic, contentType, format, reportSnippet, reportText, rawScript, and tags
   const filteredHistory = history.filter((item) => {
+    const itemTags = getItemTags(item);
+
     // 1. Tag filter check
-    if (activeTagFilter && !item.tags?.includes(activeTagFilter)) {
+    if (activeTagFilter && !itemTags.includes(activeTagFilter)) {
       return false;
     }
 
@@ -66,7 +88,7 @@ export function RecentDrawer({
     const snippetMatch = item.reportSnippet?.toLowerCase().includes(query) || false;
     const reportMatch = item.reportText?.toLowerCase().includes(query) || false;
     const scriptMatch = item.rawScript?.toLowerCase().includes(query) || false;
-    const tagMatch = item.tags?.some((t) => t.toLowerCase().includes(query)) || false;
+    const tagMatch = itemTags.some((t) => t.toLowerCase().includes(query));
 
     return topicMatch || contentTypeMatch || formatMatch || snippetMatch || reportMatch || scriptMatch || tagMatch;
   });
@@ -198,11 +220,11 @@ export function RecentDrawer({
         </div>
 
         {/* Tag Category Filter Bar */}
-        {allUniqueTags.length > 0 && (
+        {allCategoryTags.length > 0 && (
           <div className="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none text-xs">
             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1">
               <Tag className="w-3 h-3 text-indigo-500" />
-              Etiquetas:
+              Categorías IA:
             </span>
             <button
               onClick={() => setActiveTagFilter(null)}
@@ -214,8 +236,8 @@ export function RecentDrawer({
             >
               Todos ({history.length})
             </button>
-            {allUniqueTags.map((tag) => {
-              const count = history.filter((h) => h.tags?.includes(tag)).length;
+            {allCategoryTags.map((tag) => {
+              const count = history.filter((h) => getItemTags(h).includes(tag)).length;
               const isActive = activeTagFilter === tag;
               return (
                 <button
@@ -343,17 +365,26 @@ export function RecentDrawer({
                   <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs leading-snug">{item.topic}</h4>
 
                   {/* Tags Chip List */}
-                  {item.tags && item.tags.length > 0 && (
+                  {getItemTags(item).length > 0 && (
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                      {item.tags.map((t, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-semibold rounded-md flex items-center gap-0.5"
-                        >
-                          <Tag className="w-2.5 h-2.5 text-indigo-500" />
-                          <span>#{t}</span>
-                        </span>
-                      ))}
+                      {getItemTags(item).map((t, idx) => {
+                        const isTagActive = activeTagFilter === t;
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => setActiveTagFilter(isTagActive ? null : t)}
+                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-md flex items-center gap-0.5 cursor-pointer transition-all ${
+                              isTagActive
+                                ? "bg-indigo-600 text-white shadow-2xs"
+                                : "bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80"
+                            }`}
+                            title={`Filtrar por #${t}`}
+                          >
+                            <Tag className="w-2.5 h-2.5 text-indigo-500" />
+                            <span>#{t}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 

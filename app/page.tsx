@@ -9,6 +9,8 @@ import { PodcastStudioView } from "@/components/PodcastStudioView";
 import { StoryboardView } from "@/components/StoryboardView";
 import type { StoryboardData } from "@/app/api/storyboard/route";
 import { DocsView } from "@/components/DocsView";
+import { RetentionDashboardView } from "@/components/RetentionDashboardView";
+import { generateAutoTags } from "@/lib/ai-tagger";
 import { LandingHero } from "@/components/LandingHero";
 import { LandingHeader } from "@/components/LandingHeader";
 import { ToastProvider } from "@/components/Toast";
@@ -180,9 +182,17 @@ export default function Home() {
   }, [user]);
 
   const saveHistoryItem = async (item: PodcastHistoryItem) => {
+    const itemWithTags = {
+      ...item,
+      tags: item.tags && item.tags.length > 0
+        ? item.tags
+        : generateAutoTags(item.topic, item.contentType, item.reportText || item.rawScript || ""),
+    };
     if (user) {
       const itemRef = doc(db, "users", user.uid, "history", item.id);
-      await setDoc(itemRef, item);
+      await setDoc(itemRef, itemWithTags);
+    } else {
+      setHistory((prev) => [itemWithTags, ...prev.filter((h) => h.id !== item.id)]);
     }
   };
 
@@ -565,6 +575,17 @@ export default function Home() {
 
                   {activeTab === "storyboard" && (
                     <StoryboardView storyboardData={storyboardData} />
+                  )}
+
+                  {activeTab === "analytics" && (
+                    <RetentionDashboardView
+                      currentScriptLength={rawScript ? rawScript.split(/\s+/).length : (scriptLines.length * 15)}
+                      currentFormat={selectedPreset?.format || "Análisis"}
+                      onApplyLengthRecommendation={(recommendedLength) => {
+                        addToast("Recomendación de Guion", `Longitud optimizada a ${recommendedLength} palabras para mayor retención.`, "success");
+                        setActiveTab("script");
+                      }}
+                    />
                   )}
 
                   {activeTab === "docs" && <DocsView />}
