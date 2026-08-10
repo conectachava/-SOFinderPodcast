@@ -231,6 +231,10 @@ export default function Home() {
 
   // Sync status for autosave
   const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "idle">("saved");
+  const lastSyncTimeRef = React.useRef<number>(0);
+  useEffect(() => {
+    lastSyncTimeRef.current = Date.now();
+  }, []);
   const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(() => {
     if (typeof navigator !== "undefined") {
       return navigator.onLine;
@@ -281,11 +285,37 @@ export default function Home() {
 
   // Keyboard shortcut system (Ctrl+S to save/sync, Ctrl+Enter to advance pipeline)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         setSyncStatus("saving");
-        setTimeout(() => setSyncStatus("saved"), 600);
+        if (user) {
+          try {
+            const draftRef = doc(db, "users", user.uid, "drafts", "currentSession");
+            await setDoc(
+              draftRef,
+              {
+                reportText: reportText || "",
+                rawScript: rawScript || "",
+                scriptLines: scriptLines || [],
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+            lastSyncTimeRef.current = Date.now();
+            setSyncStatus("saved");
+            addToast("Sincronización Completada", "Tu progreso actual ha sido guardado exitosamente en Firestore.", "success");
+          } catch (err) {
+            console.error("Manual sync error:", err);
+            setSyncStatus("saved");
+          }
+        } else {
+          lastSyncTimeRef.current = Date.now();
+          setTimeout(() => {
+            setSyncStatus("saved");
+            addToast("Guardado Local", "Tu progreso se encuentra seguro en el almacenamiento de la sesión.", "info");
+          }, 300);
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         if (activeTab === "orchestrator") setActiveTab("sourcefinder");
@@ -295,7 +325,24 @@ export default function Home() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab]);
+  }, [activeTab, user, reportText, rawScript, scriptLines, addToast]);
+
+  // Automated quality-of-life toast notification if user hasn't synced progress to Firestore for >5 minutes (300,000ms)
+  useEffect(() => {
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - lastSyncTimeRef.current;
+      if (elapsed >= FIVE_MINUTES_MS && (reportText || rawScript || scriptLines.length > 0)) {
+        addToast(
+          "Recordatorio de Sincronización",
+          "Han pasado más de 5 minutos desde tu última sincronización en Firestore. Presiona Ctrl+S para asegurar tu progreso.",
+          "warning"
+        );
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [addToast, reportText, rawScript, scriptLines]);
 
   // Safety check to ensure verifying session modal never hangs
   useEffect(() => {
@@ -307,6 +354,7 @@ export default function Home() {
     }, 150);
     return () => clearTimeout(timer);
   }, [ready, forceUnblockLoading]);
+
   useEffect(() => {
     if (!user) return;
     queueMicrotask(() => setSyncStatus("saving"));
@@ -323,6 +371,7 @@ export default function Home() {
           },
           { merge: true }
         );
+        lastSyncTimeRef.current = Date.now();
         setSyncStatus("saved");
       } catch (e) {
         console.error("Auto-save error:", e);

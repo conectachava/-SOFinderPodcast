@@ -931,31 +931,15 @@ export function PodcastStudioView({
           </div>
         </div>
 
-        {/* Live Audio Visualizer Canvas & Speaker Status */}
-        <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 flex items-center justify-between gap-4">
-          <canvas ref={canvasRef} width={320} height={40} className="w-full max-w-md h-10" />
-
-          {samplingSpeaker ? (
-            <div className="flex items-center gap-2 bg-amber-950/80 border border-amber-600/50 text-amber-300 px-3 py-1.5 rounded text-xs animate-pulse font-mono font-bold">
-              <Volume2 className="w-4 h-4 text-amber-400" />
-              <span>Probar Muestra: {samplingSpeaker} ({sampleCountdown}s)</span>
-            </div>
-          ) : currentSpeaker ? (
-            <div className="flex items-center gap-3 bg-slate-900 px-3 py-1.5 rounded border border-slate-800 text-xs">
-              <div
-                className={`w-3 h-3 rounded-full animate-ping ${
-                  currentSpeaker.speakerRole === "host" ? "bg-pink-400" : "bg-emerald-400"
-                }`}
-              />
-              <div>
-                <span className="font-bold text-slate-200 block">{currentSpeaker.speaker}</span>
-                <span className="text-[10px] text-slate-400">
-                  {currentSpeaker.gender} | {currentSpeaker.accent}
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </div>
+        {/* Live Audio Waveform Visualizer & Equalizer Deck */}
+        <AudioWaveformVisualizer
+          isPlaying={isPlaying}
+          samplingSpeaker={samplingSpeaker}
+          isBatchAudioPlaying={isBatchAudioPlaying}
+          currentSpeaker={currentSpeaker}
+          volume={volume}
+          playbackSpeed={playbackSpeed}
+        />
 
         {/* Playback Controls & Sliders */}
         <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-800">
@@ -2009,6 +1993,189 @@ export function PodcastStudioView({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AudioWaveformVisualizer({
+  isPlaying,
+  samplingSpeaker,
+  isBatchAudioPlaying,
+  currentSpeaker,
+  volume = 0.9,
+  playbackSpeed = 1,
+}: {
+  isPlaying: boolean;
+  samplingSpeaker: string | null;
+  isBatchAudioPlaying: boolean;
+  currentSpeaker: { speaker: string; speakerRole?: string; gender?: string; accent?: string } | null;
+  volume?: number;
+  playbackSpeed?: number;
+}) {
+  const isActive = isPlaying || Boolean(samplingSpeaker) || isBatchAudioPlaying;
+  const isHost = currentSpeaker?.speakerRole === "host";
+
+  const barsCount = 36;
+  const bars = React.useMemo(() => {
+    return Array.from({ length: barsCount }).map((_, i) => {
+      const normalizedPos = i / (barsCount - 1);
+      const bellCurve = Math.sin(normalizedPos * Math.PI);
+      const baseHeight = Math.max(15, Math.round(bellCurve * 85));
+      const animationDuration = 0.35 + ((i * 7) % 11) * 0.08;
+      const animationDelay = (i * 35) % 350;
+      return {
+        id: i,
+        baseHeight,
+        animationDuration,
+        animationDelay,
+      };
+    });
+  }, [barsCount]);
+
+  return (
+    <div className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800/90 shadow-inner space-y-3 relative overflow-hidden">
+      {/* Background ambient glowing pulse when active */}
+      {isActive && (
+        <div
+          className={`absolute -inset-1 opacity-20 blur-xl transition-all duration-700 pointer-events-none ${
+            samplingSpeaker
+              ? "bg-amber-500"
+              : isHost
+              ? "bg-pink-500"
+              : "bg-emerald-500"
+          }`}
+        />
+      )}
+
+      {/* Header Info Bar */}
+      <div className="flex items-center justify-between text-xs relative z-10">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 font-mono text-[11px]">
+            <Radio
+              className={`w-3.5 h-3.5 ${
+                isActive ? "text-emerald-400 animate-pulse" : "text-slate-500"
+              }`}
+            />
+            <span
+              className={`font-bold uppercase tracking-wider ${
+                isActive ? "text-emerald-300" : "text-slate-400"
+              }`}
+            >
+              {samplingSpeaker
+                ? "Muestra de Audio (3s)"
+                : isBatchAudioPlaying
+                ? "Reproduciendo Audio HD"
+                : isPlaying
+                ? "En Vivo - Ecualizador"
+                : "Pausado - Audio Idle"}
+            </span>
+          </div>
+
+          <span className="hidden sm:inline-block text-[10px] font-mono text-slate-400">
+            Frecuencia: 20Hz - 20kHz | Vol: {Math.round(volume * 100)}%
+          </span>
+        </div>
+
+        {/* Live Speaker Tag */}
+        {samplingSpeaker ? (
+          <div className="flex items-center gap-2 bg-amber-950/90 border border-amber-600/60 text-amber-300 px-3 py-1 rounded text-xs animate-pulse font-mono font-bold shadow-2xs">
+            <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Probando Muestra: {samplingSpeaker}</span>
+          </div>
+        ) : currentSpeaker ? (
+          <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1 rounded border border-slate-800 text-xs font-mono">
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                isActive
+                  ? isHost
+                    ? "bg-pink-400 animate-ping"
+                    : "bg-emerald-400 animate-ping"
+                  : "bg-slate-500"
+              }`}
+            />
+            <span className="font-bold text-slate-200">{currentSpeaker.speaker}</span>
+            <span className="text-[10px] text-slate-400 font-semibold">
+              ({currentSpeaker.gender || "Voz"})
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Main Waveform Equalizer Canvas Display */}
+      <div className="relative z-10 flex items-end justify-between gap-1 sm:gap-1.5 h-16 pt-2 pb-1 px-2 bg-slate-900/60 rounded-lg border border-slate-800/80">
+        {/* dB Scale Backdrop Overlay */}
+        <div className="absolute inset-x-2 top-2 bottom-1 flex flex-col justify-between pointer-events-none opacity-20 border-t border-b border-dashed border-slate-600">
+          <span className="text-[8px] font-mono text-slate-400">+3 dB</span>
+          <span className="text-[8px] font-mono text-slate-400">0 dB</span>
+          <span className="text-[8px] font-mono text-slate-400">-24 dB</span>
+        </div>
+
+        {bars.map((bar) => {
+          const gradientClass = samplingSpeaker
+            ? "from-amber-400 via-yellow-500 to-amber-600"
+            : isHost
+            ? "from-pink-400 via-purple-500 to-indigo-600"
+            : "from-emerald-400 via-teal-500 to-cyan-600";
+
+          return (
+            <div
+              key={bar.id}
+              className="flex-1 flex flex-col justify-end items-center h-full group"
+            >
+              <div
+                className={`w-full max-w-[8px] rounded-t-sm bg-gradient-to-t ${gradientClass} transition-all duration-150 ${
+                  isActive ? "shadow-xs opacity-95" : "opacity-40"
+                }`}
+                style={{
+                  height: isActive
+                    ? `${Math.min(100, Math.max(15, bar.baseHeight * (0.8 + (bar.id % 3) * 0.2) * volume))}%`
+                    : `${Math.max(10, bar.baseHeight * 0.25)}%`,
+                  animation: isActive
+                    ? `waveBarBounce ${bar.animationDuration / Math.max(0.7, playbackSpeed)}s ease-in-out infinite alternate`
+                    : "wavePulse 3s ease-in-out infinite alternate",
+                  animationDelay: `${bar.animationDelay}ms`,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Frequency Labels Footer */}
+      <div className="flex justify-between items-center text-[9px] font-mono text-slate-400 px-1 pt-0.5 relative z-10">
+        <span>60Hz (Sub)</span>
+        <span>250Hz (Graves)</span>
+        <span>1kHz (Vocales)</span>
+        <span>4kHz (Presencia)</span>
+        <span>12kHz (Brillo)</span>
+      </div>
+
+      <style jsx>{`
+        @keyframes waveBarBounce {
+          0% {
+            transform: scaleY(0.2);
+            filter: brightness(0.85);
+          }
+          50% {
+            transform: scaleY(0.9);
+            filter: brightness(1.2);
+          }
+          100% {
+            transform: scaleY(0.35);
+            filter: brightness(1);
+          }
+        }
+        @keyframes wavePulse {
+          0%, 100% {
+            transform: scaleY(0.25);
+            opacity: 0.35;
+          }
+          50% {
+            transform: scaleY(0.4);
+            opacity: 0.55;
+          }
+        }
+      `}</style>
     </div>
   );
 }
