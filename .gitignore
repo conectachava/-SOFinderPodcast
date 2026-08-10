@@ -11,3 +11,5 @@ bun.lock
 firebase-applet-config
 *.pyc
 __pycache__/
+.env.example
+firebase-applet-config.json
