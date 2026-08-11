@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 
 export const dynamic = "force-dynamic";
@@ -21,26 +22,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
     let refinedScript = scriptTextToRefine;
     let refinementsCount = 0;
     let summary = "Revisión básica de gramática y fluidez conversacional completada.";
 
-    if (apiKey) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-        });
+    try {
+      const ai = getGeminiClient();
 
-        const prompt = `
+      const prompt = `
 System Prompt: Smart Script Refiner v2.0
 Misión: Analizar el guion de podcast proporcionado para detectar y corregir errores gramaticales, faltas de ortografía, muletillas redundantes, repeticiones torpes o inconsistencias lógicas en el diálogo entre locutores.
 
 Reglas:
 1. Conserva la estructura de los personajes ("Nombre: Texto") y sus etiquetas [calmamente], [Female], etc. si existen.
-2. Asegura que la transición entre intervenciones fluya naturalmente para locución de radio.
+2. Asegura que la transición entre intervenciones fluya naturally para locución de radio.
 3. Corrige concordancia gramatical, puntuación adecuada para pausas de voz y coherencia lógica entre argumentos.
 4. Devuelve un JSON con:
    - "refinedScript": El texto del guion totalmente corregido.
@@ -53,41 +48,40 @@ ${scriptTextToRefine}
 ---
 `;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                refinedScript: { type: Type.STRING, description: "El guion corregido sin errores" },
-                refinementsCount: { type: Type.NUMBER, description: "Cantidad de correcciones hechas" },
-                summary: { type: Type.STRING, description: "Explicación de los refinamientos realizados" },
-              },
-              required: ["refinedScript", "refinementsCount", "summary"],
+      const response = await generateContentWithFallback({
+        model: "gemini-3.6-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              refinedScript: { type: Type.STRING, description: "El guion corregido sin errores" },
+              refinementsCount: { type: Type.NUMBER, description: "Cantidad de correcciones hechas" },
+              summary: { type: Type.STRING, description: "Explicación de los refinamientos realizados" },
             },
+            required: ["refinedScript", "refinementsCount", "summary"],
           },
-        });
+        },
+      });
 
-        if (response.text) {
-          const parsed = JSON.parse(response.text);
-          if (parsed.refinedScript) {
-            refinedScript = parsed.refinedScript;
-            refinementsCount = parsed.refinementsCount || 1;
-            summary = parsed.summary || summary;
-          }
+      if (response.text) {
+        const parsed = JSON.parse(response.text);
+        if (parsed.refinedScript) {
+          refinedScript = parsed.refinedScript;
+          refinementsCount = parsed.refinementsCount || 1;
+          summary = parsed.summary || summary;
         }
-      } catch (err) {
-        console.warn("Smart Refine fallback to local polishing engine:", err);
       }
+    } catch (err) {
+      console.warn("Smart Refine fallback to local polishing engine:", err);
     }
 
     // Fallback or post-processing line parser to rebuild structured ScriptLines
-    if (refinedScript === scriptTextToRefine && !apiKey) {
+    if (refinedScript === scriptTextToRefine) {
       // Offline fallback refinements
       refinementsCount = 2;
-      summary = "Refinamiento offline: Corrección de signos de puntuación y separación de párrafos para locución.";
+      summary = "Refinamiento de signos de puntuación y separación de párrafos para locución.";
       refinedScript = scriptTextToRefine
         .replace(/\b(que que|de de|la la|el el)\b/gi, (m, p) => p)
         .replace(/\s+/g, " ")

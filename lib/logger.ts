@@ -14,6 +14,45 @@ export interface LogEntry {
 
 type LogListener = (entry: LogEntry) => void;
 
+/**
+ * Sanitizes log details or messages to prevent accidental exposure of sensitive keys or tokens
+ */
+function sanitizeSensitiveData(data: any): any {
+  if (!data) return data;
+  if (typeof data === "string") {
+    return data
+      .replace(/AIzaSy[A-Za-z0-9_-]{33}/g, "AIzaSy***REDACTED***")
+      .replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "jwt***REDACTED***")
+      .replace(/(?:api_?key|password|secret|token|private_?key)\s*[:=]\s*["']?([^\s"']+)["']?/gi, "$1: [REDACTED]");
+  }
+  if (typeof data === "object") {
+    try {
+      const sanitizedObj: Record<string, any> = Array.isArray(data) ? [] : {};
+      for (const [key, value] of Object.entries(data)) {
+        const lowerKey = key.toLowerCase();
+        if (
+          lowerKey.includes("key") ||
+          lowerKey.includes("password") ||
+          lowerKey.includes("secret") ||
+          lowerKey.includes("token") ||
+          lowerKey.includes("credential") ||
+          lowerKey.includes("private")
+        ) {
+          sanitizedObj[key] = "[REDACTED]";
+        } else if (typeof value === "object" && value !== null) {
+          sanitizedObj[key] = sanitizeSensitiveData(value);
+        } else {
+          sanitizedObj[key] = value;
+        }
+      }
+      return sanitizedObj;
+    } catch {
+      return "[OBJECT REDACTED]";
+    }
+  }
+  return data;
+}
+
 class CentralLogger {
   private logs: LogEntry[] = [];
   private listeners: Set<LogListener> = new Set();
@@ -50,14 +89,16 @@ class CentralLogger {
   }
 
   public log(level: LogLevel, message: string, details?: any, context = "App") {
+    const cleanMessage = sanitizeSensitiveData(message);
+    const cleanDetails = sanitizeSensitiveData(details);
     const entry: LogEntry = {
       id: Math.random().toString(36).substring(2, 9),
       timestamp: new Date().toISOString(),
       level,
-      message,
-      details,
+      message: cleanMessage,
+      details: cleanDetails,
       context,
-      stack: details?.stack || (details instanceof Error ? details.stack : undefined),
+      stack: cleanDetails?.stack || (cleanDetails instanceof Error ? cleanDetails.stack : undefined),
     };
 
     if (level === "error") {

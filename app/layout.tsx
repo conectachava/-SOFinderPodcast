@@ -7,6 +7,7 @@ import { ToastProvider } from '@/components/Toast';
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler';
 import { SystemStatusProvider, SystemStatusBanner } from '@/components/SystemStatusBanner';
 import { DevHealthConsole } from '@/components/DevHealthConsole';
+import { DynamicSeoHead } from '@/components/DynamicSeoHead';
 
 export const viewport: Viewport = {
   themeColor: '#0f172a',
@@ -98,6 +99,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="es" className="scroll-smooth">
       <body suppressHydrationWarning className="antialiased selection:bg-indigo-500 selection:text-white">
+        <DynamicSeoHead />
         <script
           id="json-ld-schema"
           type="application/ld+json"

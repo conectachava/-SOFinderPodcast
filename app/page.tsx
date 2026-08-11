@@ -354,14 +354,14 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [addToast, reportText, rawScript, scriptLines]);
 
-  // Safety check to ensure verifying session modal never hangs
+  // Safety fallback check if session verification takes unusually long (>3 seconds)
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!ready) {
-        console.log("[Home] Auto-resolving unblock loading state.");
+        console.log("[Home] Safety fallback: unblocking session loading state after timeout.");
         forceUnblockLoading();
       }
-    }, 150);
+    }, 3000);
     return () => clearTimeout(timer);
   }, [ready, forceUnblockLoading]);
 
@@ -448,7 +448,7 @@ export default function Home() {
     setActiveTab("orchestrator");
   };
 
-  if ((authStatus === "checking" || !ready || loading) && !guestBypassed) {
+  if (authStatus === "checking" || !ready || loading) {
     return (
       <SkeletonDashboardLoader
         onClearCache={async () => {
@@ -534,9 +534,12 @@ export default function Home() {
                 </aside>
               )}
 
-              <ErrorBoundary>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] border border-slate-200/90 dark:border-slate-800 overflow-hidden min-h-[720px] flex flex-col relative transition-colors duration-200">
-                  {activeTab === "orchestrator" && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] border border-slate-200/90 dark:border-slate-800 overflow-hidden min-h-[720px] flex flex-col relative transition-colors duration-200">
+                {activeTab === "orchestrator" && (
+                  <ErrorBoundary
+                    moduleName="Orquestador IA"
+                    onReset={() => setSelectedPreset(undefined)}
+                  >
                     <OrchestratorView
                       onSaveToHistory={saveHistoryItem}
                       onUpdatePipelineData={(data) => {
@@ -549,35 +552,61 @@ export default function Home() {
                       presetContentType={selectedPreset?.contentType}
                       presetFormat={selectedPreset?.format}
                     />
-                  )}
+                  </ErrorBoundary>
+                )}
 
-                  {activeTab === "sourcefinder" && (
+                {activeTab === "sourcefinder" && (
+                  <ErrorBoundary
+                    moduleName="Investigación SourceFinder"
+                    onReset={() => setReportText(undefined)}
+                  >
                     <SourceFinderView
                       onUseReportForScript={handleSourceFinderComplete}
                     />
-                  )}
+                  </ErrorBoundary>
+                )}
 
-                  {activeTab === "script" && (
+                {activeTab === "script" && (
+                  <ErrorBoundary
+                    moduleName="Estudio de Guiones"
+                    onReset={() => {
+                      setRawScript(undefined);
+                    }}
+                  >
                     <ScriptStudioView
                       initialReport={reportText}
                       onSendToStudio={handleScriptStudioComplete}
                       onToggleFocusMode={(isFocused) => setIsFocusModeActive(isFocused)}
                     />
-                  )}
+                  </ErrorBoundary>
+                )}
 
-                  {activeTab === "studio" && (
+                {activeTab === "studio" && (
+                  <ErrorBoundary
+                    moduleName="Podcast Studio (Audio Deck)"
+                    onReset={() => {
+                      setScriptLines(defaultSampleLines);
+                    }}
+                  >
                     <PodcastStudioView
                       scriptLines={scriptLines.length > 0 ? scriptLines : defaultSampleLines}
                       rawScript={rawScript}
                       topic={selectedPreset?.topic}
                     />
-                  )}
+                  </ErrorBoundary>
+                )}
 
-                  {activeTab === "storyboard" && (
+                {activeTab === "storyboard" && (
+                  <ErrorBoundary
+                    moduleName="Storyboard Visual"
+                    onReset={() => setStoryboardData(null)}
+                  >
                     <StoryboardView storyboardData={storyboardData} />
-                  )}
+                  </ErrorBoundary>
+                )}
 
-                  {activeTab === "analytics" && (
+                {activeTab === "analytics" && (
+                  <ErrorBoundary moduleName="Analítica de Retención">
                     <RetentionDashboardView
                       currentScriptLength={rawScript ? rawScript.split(/\s+/).length : (scriptLines.length * 15)}
                       currentFormat={selectedPreset?.format || "Análisis"}
@@ -586,11 +615,15 @@ export default function Home() {
                         setActiveTab("script");
                       }}
                     />
-                  )}
+                  </ErrorBoundary>
+                )}
 
-                  {activeTab === "docs" && <DocsView />}
-                </div>
-              </ErrorBoundary>
+                {activeTab === "docs" && (
+                  <ErrorBoundary moduleName="Documentación">
+                    <DocsView />
+                  </ErrorBoundary>
+                )}
+              </div>
             </>
           )}
         </main>

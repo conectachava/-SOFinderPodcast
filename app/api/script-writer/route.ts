@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
 export interface ScriptLine {
   id: string;
   speaker: string;
-  speakerRole: "host" | "caller";
-  gender?: "Male" | "Female";
+  speakerRole: "host" | "caller" | "expert" | "narrator" | string;
+  gender?: "Male" | "Female" | string;
   accent?: string;
   emotion?: string;
-  sentiment?: "neutral" | "enthusiastic" | "concerned";
+  sentiment?: "neutral" | "enthusiastic" | "concerned" | string;
   text: string;
   timestamp: string; // e.g. "0:05"
 }
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
         { name: "Sarah", gender: "Female", accent: "American Midwest" },
         { name: "David", gender: "Male", accent: "British" },
       ],
+      language = "auto",
     } = await req.json();
 
     const callersList: CallerConfig[] = Array.isArray(customCallers) ? customCallers : [];
@@ -43,6 +44,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const languageMap: Record<string, string> = {
+      es: "Español",
+      en: "English",
+      fr: "Français",
+      de: "Deutsch",
+      pt: "Português",
+      it: "Italiano",
+      auto: "Detección Automática basada en el Informe",
+    };
+
+    const targetLanguageName = languageMap[language] || language;
+
+    const languageRule =
+      language === "auto" || !language
+        ? `- SOPORTE MULTI-IDIOMA Y DETECCIÓN AUTOMÁTICA: Detecta automáticamente el idioma principal del Informe de Inteligencia. Escribe TODO el guion en ese mismo idioma (ej. si el informe está en inglés, redacta en inglés; si está en español, francés o alemán, redacta en ese idioma).`
+        : `- IDIOMA OBLIGATORIO DE SALIDA (${targetLanguageName.toUpperCase()}): Redacta TODO el guion obligatoriamente en ${targetLanguageName}. Las intervenciones del moderador y de los participantes deben expresarse con soltura nativa en ${targetLanguageName}.`;
+
     const apiKey = process.env.GEMINI_API_KEY;
     const targetWords = durationMinutes * 125;
 
@@ -50,6 +68,8 @@ export async function POST(req: NextRequest) {
 System Prompt: Guionista v2.0 (Adaptado para SourceFinder)
 ROL Y MISIÓN:
 Eres un Productor y Guionista de Radio para un podcast de actualidad. Tu misión es tomar el Informe de Inteligencia verificado y convertirlo en un guion de radio de ~${durationMinutes} minutos (aprox. ${targetWords} palabras), listo para ser grabado.
+
+${languageRule}
 
 REGLAS STRICTAS DE EJECUCIÓN:
 1. ANÁLISIS DEL INFORME:
@@ -81,23 +101,17 @@ Genera SOLO el guion estructurado en líneas bien identificables con el formato 
 
     let rawScript = "";
 
-    if (apiKey) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-        });
+    try {
+      const response = await generateContentWithFallback({
+        model: "gemini-3.6-flash",
+        contents: `${systemPrompt}\n\n--- INICIO DEL INFORME DE INTELIGENCIA ---\n${intelligenceReport}\n--- FIN DEL INFORME DE INTELIGENCIA ---`,
+      });
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: `${systemPrompt}\n\n--- INICIO DEL INFORME DE INTELIGENCIA ---\n${intelligenceReport}\n--- FIN DEL INFORME DE INTELIGENCIA ---`,
-        });
-
-        rawScript = response.text || "";
-      } catch {
-        console.log("Notice: ScriptWriter used offline script template fallback.");
-      }
+      rawScript = response.text || "";
+    } catch {
+      console.log("Notice: ScriptWriter used offline script template fallback.");
     }
+
 
     if (!rawScript) {
       // Fallback script if no API key or API call failed
@@ -203,12 +217,33 @@ ${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
     const totalWords = rawScript.split(/\s+/).length;
     const estMins = (totalWords / 125).toFixed(1);
 
+    // Heuristic detection of language from output text
+    let detectedLanguage = targetLanguageName;
+    if (language === "auto") {
+      const lower = rawScript.toLowerCase();
+      if (/\b(welcome|today|report|according|thanks|great|however|discussion)\b/i.test(lower)) {
+        detectedLanguage = "English";
+      } else if (/\b(bienvenue|aujourd'hui|rapport|selon|merci|excellent|cependant)\b/i.test(lower)) {
+        detectedLanguage = "Français";
+      } else if (/\b(willkommen|heute|bericht|laut|danke|ausgezeichnet|jedoch)\b/i.test(lower)) {
+        detectedLanguage = "Deutsch";
+      } else if (/\b(bem-vindo|hoje|relatório|segundo|obrigado|excelente|no entanto)\b/i.test(lower)) {
+        detectedLanguage = "Português";
+      } else if (/\b(benvenuto|oggi|rapporto|secondo|grazie|eccellente)\b/i.test(lower)) {
+        detectedLanguage = "Italiano";
+      } else {
+        detectedLanguage = "Español";
+      }
+    }
+
     return NextResponse.json({
       rawScript,
       lines,
       wordCount: totalWords,
       estimatedDuration: `${estMins} mins`,
       showFormat,
+      language: detectedLanguage,
+      requestedLanguage: language,
     });
   } catch (error: any) {
     console.error("Error in ScriptWriter API:", error);

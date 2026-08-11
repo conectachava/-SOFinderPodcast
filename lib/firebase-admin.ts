@@ -4,8 +4,8 @@ import { getAuth, Auth } from 'firebase-admin/auth';
 let rawFirebaseConfig: Record<string, any> = {};
 try {
   rawFirebaseConfig = require('../firebase-applet-config.json');
-} catch (e) {
-  // Config file may be omitted in production or provided purely via env variables
+} catch {
+  rawFirebaseConfig = {};
 }
 
 const projectId = (
@@ -34,8 +34,8 @@ export function getAdminApp(): App {
     return getApp();
   }
 
-  const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL)?.trim();
-  const privateKey = formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY || process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY);
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKey = formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
 
   let serviceAccountKeyObj: any = null;
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {

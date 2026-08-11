@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ function getDomainReputation(urlStr: string): number {
 async function analyzeSignals(ai?: GoogleGenAI): Promise<SignalAnalysisResult> {
   if (ai) {
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithFallback({
         model: "gemini-3.6-flash",
         contents: `Eres el módulo Analista de Señales de Tendencias Globales en Tiempo Real.
 REGLA CRÍTICA: Las tendencias NO deben pertenecer a ningún tema o nicho específico predeterminado (por ejemplo, NO te limites a tecnología o música). Deben reflejar lo que está en tendencia A NIVEL GENERAL MUNDIAL en este instante exacto de ejecución (noticias destacadas de última hora, acontecimientos internacionales, cultura popular, espectáculos, deportes, economía o eventos globales virales).
@@ -166,14 +167,11 @@ export async function POST(req: NextRequest) {
     let topicToResearch = inputTopic.trim();
     let signalAnalysis: SignalAnalysisResult | null = null;
 
-    const apiKey = process.env.GEMINI_API_KEY;
     let aiClient: GoogleGenAI | undefined;
-
-    if (apiKey) {
-      aiClient = new GoogleGenAI({
-        apiKey,
-        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-      });
+    try {
+      aiClient = getGeminiClient();
+    } catch {
+      console.log("Notice: AI Client initialization fallback.");
     }
 
     // Check if Signal Analyst mode (TENDENCIAS or general trends request) is triggered
@@ -224,7 +222,7 @@ Genera un informe de inteligencia en Markdown estricto con las siguientes seccio
 Analiza críticamente la información y sé sumamente veraz. Evita sesgos y clickbait.
 `;
 
-        const response = await ai.models.generateContent({
+        const response = await generateContentWithFallback({
           model: "gemini-3.6-flash",
           contents: searchPrompt,
           config: {

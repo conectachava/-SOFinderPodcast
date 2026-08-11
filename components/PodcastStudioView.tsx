@@ -30,9 +30,53 @@ import { safeFetchJson } from "@/lib/utils";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
+import { ScriptSentimentPanel } from "./ScriptSentimentPanel";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import { NarrativeArcChart } from "./NarrativeArcChart";
 import { VoiceProfileManager } from "./VoiceProfileManager";
+
+export const SPEECH_LOCUTION_STYLES = [
+  {
+    id: "formal",
+    label: "🏛️ Formal & Académico",
+    desc: "Tono solemne, velocidad pausada y dicción clara para análisis técnico riguroso.",
+    speed: 0.9,
+    pitch: 0,
+    warmth: 60,
+  },
+  {
+    id: "enthusiastic",
+    label: "⚡ Entusiasta & Dinámico",
+    desc: "Ritmo ágil, inflexiones enérgicas e impacto de alta resonancia para cautivar la audiencia.",
+    speed: 1.15,
+    pitch: 5,
+    warmth: 85,
+  },
+  {
+    id: "narrative",
+    label: "📖 Narrativo & Cuentacuentos",
+    desc: "Pausas dramáticas, tempo envolvente y expresividad cálida ideal para relatos.",
+    speed: 0.85,
+    pitch: -3,
+    warmth: 90,
+  },
+  {
+    id: "radio",
+    label: "📻 Radiofónico & Comercial",
+    desc: "Voz profunda de locutor FM, presencia con autoridad y compresión envolvente.",
+    speed: 1.0,
+    pitch: -8,
+    warmth: 100,
+  },
+  {
+    id: "conversational",
+    label: "💬 Conversacional & Natural",
+    desc: "Espontaneidad relajada, fluidez entre locutores y tono cercano del día a día.",
+    speed: 1.0,
+    pitch: 2,
+    warmth: 75,
+  },
+];
 
 export const AMBIENT_MUSIC_TRACKS = [
   { id: "none", label: "🚫 Sin Música (Solo Voces)", desc: "Pista limpia en primer plano sin ambiente" },
@@ -154,14 +198,14 @@ export function PodcastStudioView({
 
   const [isGeneratingCover, setIsGeneratingCover] = useState<boolean>(false);
 
-  // Calculate estimated podcast duration based on total script word count (~140 wpm rate)
+  // Calculate estimated podcast duration based on total script word count (~150 wpm rate)
   const { totalWords, estimatedDurationFormatted, estimatedMinutesSeconds } = React.useMemo(() => {
     const words = lines.reduce((acc, l) => {
       const textVal = l.text || "";
       return acc + textVal.trim().split(/\s+/).filter(Boolean).length;
     }, 0);
 
-    const totalSecs = Math.max(0, Math.round((words / 140) * 60));
+    const totalSecs = Math.max(0, Math.round((words / 150) * 60));
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
     const formattedMS = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
@@ -170,7 +214,7 @@ export function PodcastStudioView({
       totalWords: words,
       totalSeconds: totalSecs,
       estimatedMinutesSeconds: formattedMS,
-      estimatedDurationFormatted: `~${formattedMS} min (${words} palabras)`,
+      estimatedDurationFormatted: `~${formattedMS} min (${words} palabras @ 150 wpm)`,
     };
   }, [lines]);
 
@@ -211,6 +255,33 @@ export function PodcastStudioView({
   const [musicDucking, setMusicDucking] = useState<number>(0.15); // background ambient level
   const [geminiAudioLoading, setGeminiAudioLoading] = useState<boolean>(false);
   const [geminiAudioUrl, setGeminiAudioUrl] = useState<string | null>(null);
+
+  // Speech Locution Style State
+  const [selectedLocutionStyle, setSelectedLocutionStyle] = useState<string>("conversational");
+
+  const handleApplyLocutionStyle = (styleId: string) => {
+    const styleObj = SPEECH_LOCUTION_STYLES.find((s) => s.id === styleId);
+    if (!styleObj) return;
+
+    setSelectedLocutionStyle(styleId);
+
+    const newSpeeds: Record<string, number> = {};
+    const newPitches: Record<string, number> = {};
+
+    uniqueSpeakers.forEach((spk) => {
+      newSpeeds[spk.speaker] = styleObj.speed;
+      newPitches[spk.speaker] = styleObj.pitch;
+    });
+
+    setSpeakerSpeeds(newSpeeds);
+    setSpeakerPitches(newPitches);
+
+    addToast(
+      "Perfil de Voz Aplicado",
+      `Estilo "${styleObj.label}" configurado para todos los locutores.`,
+      "info"
+    );
+  };
 
   // Ambient Music Selection State
   const [selectedAmbientTrack, setSelectedAmbientTrack] = useState<string>("ambient_lounge");
@@ -871,9 +942,12 @@ export function PodcastStudioView({
                 <span className="px-2.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold rounded uppercase tracking-wider">
                   Radio Studio Deck v2.0
                 </span>
-                <span className="px-2.5 py-0.5 bg-indigo-950/80 text-indigo-300 border border-indigo-800/80 text-[10px] font-mono font-bold rounded flex items-center gap-1">
+                <span
+                  className="px-2.5 py-0.5 bg-indigo-950/80 text-indigo-300 border border-indigo-800/80 text-[10px] font-mono font-bold rounded flex items-center gap-1"
+                  title="Duración estimada calculada a un promedio de 150 palabras por minuto"
+                >
                   <Clock className="w-3 h-3 text-indigo-400" />
-                  <span>Duración Estimada: {estimatedMinutesSeconds} min</span>
+                  <span>Duración Estimada: {estimatedMinutesSeconds} min (150 wpm)</span>
                 </span>
                 <span className="px-2.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold rounded flex items-center gap-1">
                   <FileText className="w-3 h-3 text-emerald-400" />
@@ -1433,6 +1507,67 @@ export function PodcastStudioView({
             </div>
           </div>
         )}
+      </div>
+
+      {/* SCRIPT SENTIMENT & EMOTIONAL IMPACT PANEL */}
+      <ScriptSentimentPanel scriptLines={lines} />
+
+      {/* SELECTOR DE PERFIL DE VOZ / ESTILO DE LOCUCIÓN IA */}
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                <Mic className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                Selector de Perfil de Voz & Estilo de Locución IA
+              </h3>
+              <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-full text-[10px] font-mono font-bold">
+                Voice Style Preset
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Selecciona la intención narrativa y modulación del elenco de locutores para ajustar la resonancia del episodio.
+            </p>
+          </div>
+        </div>
+
+        {/* Voice Style Preset Options Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {SPEECH_LOCUTION_STYLES.map((style) => {
+            const isSelected = selectedLocutionStyle === style.id;
+            return (
+              <button
+                key={style.id}
+                type="button"
+                onClick={() => handleApplyLocutionStyle(style.id)}
+                className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 cursor-pointer ${
+                  isSelected
+                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-400 dark:border-amber-600 shadow-xs ring-1 ring-amber-400"
+                    : "bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700"
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>{style.label}</span>
+                    {isSelected && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                    {style.desc}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60 font-mono text-[9px] text-slate-400">
+                  <span>Vel: {style.speed}x</span>
+                  <span>Pitch: {style.pitch}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* SPEAKER VOICE CAST DECK (PLAY SAMPLE 3s PER SPEAKER) */}

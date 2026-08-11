@@ -1,12 +1,6 @@
-export interface ScriptLine {
-  id: string;
-  speaker: string;
-  speakerRole: "host" | "expert" | "narrator" | string;
-  gender: "Male" | "Female" | string;
-  text: string;
-  emotion: string;
-  timestamp: string;
-}
+import type { ScriptLine } from "@/app/api/script-writer/route";
+
+export type { ScriptLine };
 
 export interface PipelineSessionState {
   reportText?: string;

@@ -6,11 +6,38 @@ import { logger } from "@/lib/logger";
 /**
  * GlobalErrorHandler suppresses unhandled browser rejections caused by IndexedDB full disk errors,
  * AbortErrors, or QuotaExceeded errors in sandboxed / iframe environments, and logs critical unexpected errors
- * to the central logging system.
+ * to the central logging system AND Firestore system_errors collection for proactive dev team monitoring.
  */
 export function GlobalErrorHandler() {
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const logToFirestore = async (errorType: string, message: string, detailObj: any) => {
+      try {
+        const { db, safeSetDoc } = await import("@/lib/firebase");
+        const { doc } = await import("firebase/firestore");
+        if (!db) return;
+
+        const docId = `ERR-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const errorDocRef = doc(db, "system_errors", docId);
+        const payload = {
+          errorId: docId,
+          type: errorType,
+          message: String(message || "Error sin mensaje"),
+          stack: detailObj?.stack || (detailObj instanceof Error ? detailObj.stack : null),
+          url: typeof window !== "undefined" ? window.location.href : "",
+          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+          timestamp: new Date().toISOString(),
+          status: "unresolved",
+          severity: "critical",
+          details: typeof detailObj === "object" ? JSON.stringify(detailObj) : String(detailObj || ""),
+        };
+        await safeSetDoc(errorDocRef, payload, { merge: true });
+        logger.info(`[GLOBAL_ERR_FIRESTORE] Error crítico registrado en Firestore 'system_errors': ${docId}`, { docId }, "GlobalErrorHandler");
+      } catch (e: any) {
+        console.warn("[GlobalErrorHandler] No se pudo guardar el error en Firestore system_errors:", e?.message);
+      }
+    };
 
     const isAbortOrStorageError = (err: any, msgStr: string) => {
       const name = String(err?.name || "").toLowerCase();
@@ -59,6 +86,7 @@ export function GlobalErrorHandler() {
         logger.debug("Sancionada cancelación o cuota inofensiva de fondo", { message }, "GlobalErrorHandler");
       } else {
         logger.error(`Promesa rechazada no capturada: ${message}`, reason, "GlobalErrorHandler");
+        logToFirestore("unhandled_rejection", message, reason);
       }
     };
 
@@ -74,6 +102,7 @@ export function GlobalErrorHandler() {
         logger.debug("Sancionado error global inofensivo de fondo", { message }, "GlobalErrorHandler");
       } else {
         logger.error(`Error de ejecución cliente: ${message}`, err || { filename: event.filename, lineno: event.lineno }, "GlobalErrorHandler");
+        logToFirestore("runtime_error", message, err || { filename: event.filename, lineno: event.lineno });
       }
     };
 

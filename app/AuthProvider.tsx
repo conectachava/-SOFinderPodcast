@@ -147,11 +147,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
 
-    // Fast safety fallback timer so auth loading state never stalls the UI
+    // Safety fallback timer if Firebase Auth initialization hangs or takes unusually long
     const safetyTimer = setTimeout(() => {
+      console.log("[AuthProvider] Auth initialization timeout fallback reached.");
       setLoading(false);
       setReady(true);
-    }, 100);
+    }, 2500);
 
     // Process redirect result if returning from a Google OAuth redirect flow
     getRedirectResult(auth)

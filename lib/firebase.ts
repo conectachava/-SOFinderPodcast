@@ -4,8 +4,8 @@ import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
 let rawFirebaseConfig: Record<string, any> = {};
 try {
   rawFirebaseConfig = require('../firebase-applet-config.json');
-} catch (e) {
-  // Config file may be omitted in production or provided purely via env variables
+} catch {
+  rawFirebaseConfig = {};
 }
 
 const firebaseConfig = {

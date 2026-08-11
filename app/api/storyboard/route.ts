@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient } from "@/lib/gemini";
+import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -133,8 +133,7 @@ export async function POST(req: NextRequest) {
         : "");
 
     try {
-      const ai = getGeminiClient();
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithFallback({
         model: "gemini-3.5-flash",
         contents: `${SYSTEM_PROMPT}\n\n**GUION DE PODCAST:**\n${inputScript}`,
       });

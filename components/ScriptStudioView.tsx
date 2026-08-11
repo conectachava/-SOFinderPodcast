@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User, Sparkles, BarChart3, ChevronDown, ChevronUp, Quote, BookOpen, Link2, Plus, ExternalLink, X, Bookmark, ChevronRight, Maximize2, Minimize2, Eye, Search, SlidersHorizontal, Type, Smile, Shield, Zap, AlertCircle, CheckCircle2, HelpCircle, Square, Volume2 } from "lucide-react";
+import { FileText, Radio, Sliders, RefreshCw, Copy, Check, Play, Mic, User, Sparkles, BarChart3, ChevronDown, ChevronUp, Quote, BookOpen, Link2, Plus, ExternalLink, X, Bookmark, ChevronRight, Maximize2, Minimize2, Eye, Search, SlidersHorizontal, Type, Smile, Shield, Zap, AlertCircle, CheckCircle2, HelpCircle, Square, Volume2, Globe, Languages } from "lucide-react";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { safeFetchJson } from "@/lib/utils";
+import { updatePodcastSeoTopic } from "@/components/DynamicSeoHead";
 import {
   parseRawScriptToLines,
   reconstructRawScriptFromLines,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/script-parser";
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
+import { ScriptSentimentPanel } from "./ScriptSentimentPanel";
 
 // Color-Coded Emotion Pill Component representing selected line emotion for Narrative Arc visual checks
 export function EmotionPill({ emotion, sentiment }: { emotion?: string; sentiment?: string }) {
@@ -207,7 +209,7 @@ function ScriptAnalyticsPanel({ lines }: { lines: ScriptLine[] }) {
     speaker,
     words: data.words,
     turns: data.turns,
-    seconds: Math.round((data.words / 140) * 60),
+    seconds: Math.round((data.words / 150) * 60),
     percentage: totalWords > 0 ? Math.round((data.words / totalWords) * 100) : 0,
     Neutral: data.sentiments.neutral || 0,
     Entusiasta: data.sentiments.enthusiastic || 0,
@@ -286,7 +288,7 @@ function ScriptAnalyticsPanel({ lines }: { lines: ScriptLine[] }) {
             <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
               <span className="text-[10px] text-slate-400 font-mono block">TIEMPO ESTIMADO</span>
               <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                ~{Math.round((totalWords / 140) * 60)}s
+                ~{Math.round((totalWords / 150) * 60)}s
               </span>
             </div>
             <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -321,7 +323,7 @@ function ScriptAnalyticsPanel({ lines }: { lines: ScriptLine[] }) {
                     </Pie>
                     <Tooltip
                       contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "8px", color: "#fff", fontSize: "11px" }}
-                      formatter={(val: any) => [`${val} palabras (~${Math.round(((val as number) / 140) * 60)}s)`, "Volumen"]}
+                      formatter={(val: any) => [`${val} palabras (~${Math.round(((val as number) / 150) * 60)}s)`, "Volumen"]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -330,7 +332,7 @@ function ScriptAnalyticsPanel({ lines }: { lines: ScriptLine[] }) {
               <div className="space-y-2">
                 <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200">Equilibrio del Diálogo</h5>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Proporción de tiempo ocupado por cada locutor según ~140 palabras por minuto.
+                  Proporción de tiempo ocupado por cada locutor según ~150 palabras por minuto.
                 </p>
                 <div className="space-y-1.5 pt-1">
                   {speakerData.map((s, idx) => (
@@ -465,6 +467,8 @@ export function ScriptStudioView({
 
   const [showFormat, setShowFormat] = useState<"Debate" | "Análisis" | "Opinión">("Debate");
   const [durationMinutes, setDurationMinutes] = useState(3);
+  const [scriptLanguage, setScriptLanguage] = useState<string>("auto");
+  const [detectedLanguage, setDetectedLanguage] = useState<string | null>("Español");
   const [hostName, setHostName] = useState("Paul");
   const [hostVoiceProfile, setHostVoiceProfile] = useState("Zephyr");
   const [callers, setCallers] = useState([
@@ -977,6 +981,7 @@ export function ScriptStudioView({
           durationMinutes,
           customHostName: hostName,
           customCallers: callers,
+          language: scriptLanguage,
         }),
       });
 
@@ -987,13 +992,25 @@ export function ScriptStudioView({
       const data = response.data;
       setRawScript(data.rawScript);
       setParsedLines(data.lines || []);
+      if (data.language) {
+        setDetectedLanguage(data.language);
+      }
       pushHistory(data.rawScript, data.lines || []);
       setStats({
         wordCount: data.wordCount,
         estimatedDuration: data.estimatedDuration,
       });
 
-      addToast("Guion Generado", `Guion de ${data.wordCount} palabras redactado exitosamente.`, "success");
+      // Update Dynamic SEO Meta Tags based on generated script topic & language
+      const firstHeading = reportText.split("\n").find(l => l.trim().startsWith("#"))?.replace(/^#+\s*/, "") || "Podcast Especial";
+      updatePodcastSeoTopic({
+        topic: `${firstHeading} (${data.language || "Multi-Idioma"})`,
+        description: data.rawScript ? data.rawScript.slice(0, 220) + "..." : undefined,
+        language: data.language === "English" ? "en" : data.language === "Français" ? "fr" : "es",
+        format: showFormat,
+      });
+
+      addToast("Guion Generado", `Guion de ${data.wordCount} palabras redactado en ${data.language || "idioma detectado"}.`, "success");
     } catch (err: any) {
       if (err?.name === "AbortError" || String(err?.message || "").toLowerCase().includes("abort")) {
         return;
@@ -1252,7 +1269,7 @@ export function ScriptStudioView({
               <div className="flex items-center gap-3">
                 <span>Total Líneas: <strong className="text-slate-900 dark:text-white font-mono">{focusFilteredLines.length}</strong></span>
                 <span>Palabras: <strong className="text-slate-900 dark:text-white font-mono">{rawScript.trim().split(/\s+/).filter(Boolean).length}</strong></span>
-                <span>Tiempo de Lectura: <strong className="text-[#1a73e8] dark:text-blue-400 font-mono">~{Math.round((rawScript.trim().split(/\s+/).filter(Boolean).length / 140) * 60)} seg</strong></span>
+                <span>Tiempo de Lectura: <strong className="text-[#1a73e8] dark:text-blue-400 font-mono">~{Math.round((rawScript.trim().split(/\s+/).filter(Boolean).length / 150) * 60)} seg</strong></span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1492,35 +1509,55 @@ export function ScriptStudioView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
-                Estilo de Programa
+                Estilo
               </label>
               <select
                 value={showFormat}
                 onChange={(e) => setShowFormat(e.target.value as any)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 bg-white dark:bg-slate-800 font-medium text-slate-800 dark:text-slate-100"
+                className="w-full px-2.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 bg-white dark:bg-slate-800 font-medium text-slate-800 dark:text-slate-100 text-xs"
               >
                 <option value="Debate">Debate (Conflicto)</option>
-                <option value="Análisis">Análisis (Mesa Redonda)</option>
+                <option value="Análisis">Análisis (Mesa)</option>
                 <option value="Opinión">Opinión (Entrevista)</option>
               </select>
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-500 uppercase text-[10px] tracking-wider mb-1.5">
-                Duración Doblaje
+              <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
+                Duración
               </label>
               <select
                 value={durationMinutes}
                 onChange={(e) => setDurationMinutes(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 bg-white font-medium text-slate-800"
+                className="w-full px-2.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 bg-white dark:bg-slate-800 font-medium text-slate-800 dark:text-slate-100 text-xs"
               >
-                <option value={1}>1 min (~125 palabras)</option>
-                <option value={2}>2 mins (~250 palabras)</option>
-                <option value={3}>3 mins (~375 palabras)</option>
-                <option value={5}>5 mins (~625 palabras)</option>
+                <option value={1}>1 min (~125 p.)</option>
+                <option value={2}>2 mins (~250 p.)</option>
+                <option value={3}>3 mins (~375 p.)</option>
+                <option value={5}>5 mins (~625 p.)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5 flex items-center gap-1">
+                <Globe className="w-3 h-3 text-[#1a73e8]" />
+                Idioma
+              </label>
+              <select
+                value={scriptLanguage}
+                onChange={(e) => setScriptLanguage(e.target.value)}
+                className="w-full px-2.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#1a73e8] bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-slate-100 text-xs"
+              >
+                <option value="auto">🌐 Auto (Detectar)</option>
+                <option value="es">🇪🇸 Español</option>
+                <option value="en">🇺🇸 English</option>
+                <option value="fr">🇫🇷 Français</option>
+                <option value="de">🇩🇪 Deutsch</option>
+                <option value="pt">🇧🇷 Português</option>
+                <option value="it">🇮🇹 Italiano</option>
               </select>
             </div>
           </div>
@@ -1640,12 +1677,16 @@ export function ScriptStudioView({
 
         {rawScript ? (
           <div className="bg-slate-900 text-slate-300 border border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-lg">
-            {/* Dark Header with Collaboration Toggle */}
+            {/* Dark Header with Collaboration Toggle & Language Indicator */}
             <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950/50 gap-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   Podcast Script <span className="text-slate-500 font-normal">(Draft v2)</span>
                 </h3>
+                <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                  <Globe className="w-3 h-3 text-indigo-400" />
+                  Idioma: {detectedLanguage || (scriptLanguage === "auto" ? "Detectado" : scriptLanguage.toUpperCase())}
+                </span>
                 <button
                   onClick={() => setCollabMode(!collabMode)}
                   className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1.5 transition-colors ${
@@ -2145,6 +2186,9 @@ export function ScriptStudioView({
 
         {/* Script Analytics & Character Intelligence Chart Panel */}
         <ScriptAnalyticsPanel lines={parsedLines} />
+
+        {/* Script Sentiment & Emotional Impact Panel */}
+        <ScriptSentimentPanel scriptLines={parsedLines} rawScript={rawScript} />
 
         {/* Collaborative Notes & Comments Widget */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-2xs space-y-4 transition-colors">

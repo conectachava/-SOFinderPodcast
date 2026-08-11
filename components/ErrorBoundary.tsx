@@ -7,6 +7,9 @@ import { logger } from "@/lib/logger";
 
 interface Props {
   children: ReactNode;
+  moduleName?: string;
+  onReset?: () => void;
+  fallbackTitle?: string;
 }
 
 interface State {
@@ -123,7 +126,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
-            Algo salió mal en este módulo
+            {this.props.fallbackTitle || (this.props.moduleName ? `Algo salió mal en el módulo ${this.props.moduleName}` : "Algo salió mal en este módulo")}
           </h2>
           
           <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mb-4 font-mono bg-slate-200/60 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-300/60 dark:border-slate-700/60 break-words">
@@ -221,11 +224,15 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={() => {
                 this.setState({ hasError: false, error: null, reportSuccess: false });
-                window.location.reload();
+                if (this.props.onReset) {
+                  this.props.onReset();
+                } else {
+                  window.location.reload();
+                }
               }}
               className="w-full sm:w-auto px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-medium text-xs rounded-xl transition-colors shadow-sm cursor-pointer"
             >
-              🔄 Restablecer Vista
+              🔄 Restablecer Módulo
             </button>
             <button
               onClick={() => {

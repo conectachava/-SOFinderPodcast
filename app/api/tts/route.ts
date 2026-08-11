@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { getGeminiClient } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -11,23 +11,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Text is required for TTS" }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "GEMINI_API_KEY not configured" },
-        { status: 500 }
-      );
-    }
-
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-    });
+    const ai = getGeminiClient();
 
     let config: any = {
       responseModalities: ["AUDIO"],
     };
+
 
     if (multiSpeaker && Array.isArray(speakers) && speakers.length >= 2) {
       config.speechConfig = {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -20,16 +21,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    try {
+      const ai = getGeminiClient();
 
-    if (apiKey) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-        });
-
-        const prompt = `
+      const prompt = `
 System Prompt: Podcast Metadata & Hosting Optimizer Engine v1.0
 Misión: Analizar el guion de podcast y el tema principal proporcionados para generar metadatos altamente optimizados para plataformas de distribución (Spotify, Apple Podcasts, YouTube Podcasts, RSS).
 
@@ -48,54 +43,53 @@ Requisitos de Salida:
 5. "platformOptimization": Consejos específicos para Spotify, Apple Podcasts y YouTube.
 `;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING, description: "Título optimizado para SEO" },
-                description: { type: Type.STRING, description: "Descripción completa del episodio" },
-                showNotes: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      timestamp: { type: Type.STRING, description: "Marca de tiempo ej. '01:15'" },
-                      title: { type: Type.STRING, description: "Título de la sección" },
-                      description: { type: Type.STRING, description: "Punto clave o resumen" },
-                    },
-                    required: ["timestamp", "title", "description"],
-                  },
-                },
-                hashtags: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                platformOptimization: {
+      const response = await generateContentWithFallback({
+        model: "gemini-3.6-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING, description: "Título optimizado para SEO" },
+              description: { type: Type.STRING, description: "Descripción completa del episodio" },
+              showNotes: {
+                type: Type.ARRAY,
+                items: {
                   type: Type.OBJECT,
                   properties: {
-                    spotifyTip: { type: Type.STRING },
-                    applePodcastsTip: { type: Type.STRING },
-                    youtubeTip: { type: Type.STRING },
+                    timestamp: { type: Type.STRING, description: "Marca de tiempo ej. '01:15'" },
+                    title: { type: Type.STRING, description: "Título de la sección" },
+                    description: { type: Type.STRING, description: "Punto clave o resumen" },
                   },
-                  required: ["spotifyTip", "applePodcastsTip", "youtubeTip"],
+                  required: ["timestamp", "title", "description"],
                 },
               },
-              required: ["title", "description", "showNotes", "hashtags", "platformOptimization"],
+              hashtags: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+              platformOptimization: {
+                type: Type.OBJECT,
+                properties: {
+                  spotifyTip: { type: Type.STRING },
+                  applePodcastsTip: { type: Type.STRING },
+                  youtubeTip: { type: Type.STRING },
+                },
+                required: ["spotifyTip", "applePodcastsTip", "youtubeTip"],
+              },
             },
+            required: ["title", "description", "showNotes", "hashtags", "platformOptimization"],
           },
-        });
+        },
+      });
 
-        if (response.text) {
-          const parsed = JSON.parse(response.text);
-          return NextResponse.json(parsed);
-        }
-      } catch (err) {
-        console.warn("[Podcast Metadata Gemini API Warning]:", err);
+      if (response.text) {
+        const parsed = JSON.parse(response.text);
+        return NextResponse.json(parsed);
       }
+    } catch (err) {
+      console.warn("[Podcast Metadata Gemini API Warning]:", err);
     }
 
     // Fallback generation logic if Gemini API key is unavailable or errored
