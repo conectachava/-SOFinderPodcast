@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
   };
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
     const { topic: inputTopic, contentType = "General", customMinReputation } = await req.json();
 
@@ -311,4 +312,4 @@ ${topicToResearch} ha emergido como la tendencia principal tras el análisis mul
       { status: 500 }
     );
   }
-}
+});

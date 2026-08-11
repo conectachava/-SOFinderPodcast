@@ -1,19 +1,21 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Shield, Filter, RefreshCw, Copy, Check, ExternalLink, AlertTriangle, FileText, Sparkles, TrendingUp, BarChart3, Quote, Link2, BookmarkCheck } from "lucide-react";
+import { Search, Shield, Filter, RefreshCw, Copy, Check, ExternalLink, AlertTriangle, FileText, Sparkles, TrendingUp, BarChart3, Quote, Link2, BookmarkCheck, Layers, ListOrdered, Wand2, Plus, Trash2, Edit3, ArrowRight, BookOpen, Share2, Play } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SourceBadge } from "./SourceBadge";
 import { useToast } from "./Toast";
 import type { SignalAnalysisResult } from "@/app/api/source-finder/route";
+import type { TopicDecompositionResult, SubtopicItem } from "@/app/api/topic-decomposer/route";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
 import { safeFetchJson } from "@/lib/utils";
 
 export function SourceFinderView({ onUseReportForScript }: { onUseReportForScript?: (report: string) => void }) {
   const { addToast } = useToast();
 
-  const [topic, setTopic] = useState("Lanzamiento de iPhone 15 Pro y Reporte de Ganancias Apple");
+  const [mode, setMode] = useState<"direct" | "sequential">("direct");
+  const [topic, setTopic] = useState("Revolución de la Inteligencia Artificial Generativa: Agentes Autónomos, AGI y el Futuro del Trabajo");
   const [contentType, setContentType] = useState("Noticia Tecnológica");
   const [minReputation, setMinReputation] = useState(0.7);
   const [loading, setLoading] = useState(false);
@@ -27,6 +29,16 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
   const [hoveredSourceIndex, setHoveredSourceIndex] = useState<number | null>(null);
   const [isCitingActive, setIsCitingActive] = useState<boolean>(false);
   const [activeCitationIndex, setActiveCitationIndex] = useState<number | null>(null);
+
+  // Sequential mode state
+  const [subtopicCount, setSubtopicCount] = useState<number>(4);
+  const [decomposing, setDecomposing] = useState<boolean>(false);
+  const [decomposition, setDecomposition] = useState<TopicDecompositionResult | null>(null);
+  const [activeSubtopicIdx, setActiveSubtopicIdx] = useState<number | null>(null);
+  const [batchInvestigating, setBatchInvestigating] = useState<boolean>(false);
+  const [editingSubtopicIdx, setEditingSubtopicIdx] = useState<number | null>(null);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedDesc, setEditedDesc] = useState("");
 
   // Extract key facts and link them with source verification data
   const citations = React.useMemo(() => {
@@ -152,6 +164,188 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Handler to decompose topic into logical subtopic sequence
+  const handleDecomposeTopic = async () => {
+    if (!topic.trim()) {
+      addToast("Error de Validación", "Por favor ingresa un tema principal a analizar.", "error");
+      return;
+    }
+
+    setDecomposing(true);
+    setError(null);
+    addToast(
+      "Analizando Estructura y Subtemas",
+      `Descomponiendo "${topic}" en ${subtopicCount} entregas secuenciales con hilo conductor...`,
+      "info"
+    );
+
+    try {
+      const response = await safeFetchJson("/api/topic-decomposer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: topic.trim(),
+          contentType,
+          targetCount: subtopicCount,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(response.error || "Error al descomponer el tema en secuencia.");
+      }
+
+      setDecomposition(response.data);
+      addToast(
+        "Secuencia Generada",
+        `Se identificaron ${response.data.subtopics.length} subtemas con identidad y secuencia narrativa.`,
+        "success"
+      );
+    } catch (err: any) {
+      const msg = err.message || "No se pudo descomponer el tema.";
+      setError(msg);
+      addToast("Error al Descomponer", msg, "error");
+    } finally {
+      setDecomposing(false);
+    }
+  };
+
+  // Investigate a specific subtopic from the sequence
+  const handleInvestigateSubtopic = async (subtopic: SubtopicItem, idx: number) => {
+    setActiveSubtopicIdx(idx);
+    setTopic(subtopic.title);
+    addToast(
+      "Investigando Subtema",
+      `Ejecutando auditoría de inteligencia para el Módulo #${subtopic.sequenceNumber}: "${subtopic.title}"`,
+      "info"
+    );
+    await handleResearch(subtopic.title);
+  };
+
+  // Investigate all subtopics in batch to compile a full master report
+  const handleBatchInvestigateAll = async () => {
+    if (!decomposition || decomposition.subtopics.length === 0) return;
+
+    setBatchInvestigating(true);
+    addToast(
+      "Investigación en Lote Iniciada",
+      `Ejecutando auditoría para los ${decomposition.subtopics.length} subtemas de la serie...`,
+      "info"
+    );
+
+    let masterReport = `# INFORME MAESTRO DE INTELIGENCIA Y SECUENCIA NARRATIVA\n\n`;
+    masterReport += `**Serie:** ${decomposition.suggestedSeriesTitle}\n`;
+    masterReport += `**Tema Central:** ${decomposition.mainTopic}\n`;
+    masterReport += `**Identidad Narrativa & Hilo Conductor:** ${decomposition.narrativeIdentity}\n`;
+    masterReport += `**Audiencia Objetivo:** ${decomposition.targetAudience}\n\n`;
+    masterReport += `---\n\n`;
+
+    const allSources: any[] = [];
+
+    try {
+      for (let i = 0; i < decomposition.subtopics.length; i++) {
+        const sub = decomposition.subtopics[i];
+        addToast("Procesando Lote", `Procesando (${i + 1}/${decomposition.subtopics.length}): ${sub.title}`, "info");
+
+        const res = await safeFetchJson("/api/source-finder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: `${decomposition.mainTopic} - ${sub.title}`,
+            contentType,
+            customMinReputation: minReputation,
+          }),
+        });
+
+        if (res.ok && res.data) {
+          masterReport += `## ENTREGABLE #${sub.sequenceNumber}: ${sub.title.toUpperCase()}\n`;
+          masterReport += `* **Enfoque Sugerido:** ${sub.recommendedAngle}\n`;
+          masterReport += `* **Duración Objetivo:** ${sub.suggestedDuration}\n\n`;
+          masterReport += `${res.data.report}\n\n`;
+          masterReport += `---\n\n`;
+
+          if (Array.isArray(res.data.qualifiedSources)) {
+            allSources.push(...res.data.qualifiedSources);
+          }
+        }
+      }
+
+      setReport(masterReport);
+      setQualifiedSources(allSources);
+      addToast("Informe Maestro Completado", "Se compiló la investigación completa de todos los subtemas.", "success");
+    } catch (err: any) {
+      addToast("Error en Lote", err.message || "Ocurrió un error en la investigación en lote.", "error");
+    } finally {
+      setBatchInvestigating(false);
+    }
+  };
+
+  const handleCopySequenceMarkdown = () => {
+    if (!decomposition) return;
+    let md = `# SERIE DE PODCAST: ${decomposition.suggestedSeriesTitle.toUpperCase()}\n\n`;
+    md += `**Tema Central:** ${decomposition.mainTopic}\n`;
+    md += `**Identidad Narrativa & Hilo Conductor:** ${decomposition.narrativeIdentity}\n`;
+    md += `**Audiencia Objetivo:** ${decomposition.targetAudience}\n\n`;
+    md += `### ESTRUCTURA Y SUBTEMAS SECUENCIALES:\n\n`;
+
+    decomposition.subtopics.forEach((s) => {
+      md += `#### #${s.sequenceNumber} - ${s.title}\n`;
+      md += `${s.description}\n`;
+      md += `- **Puntos Clave:** ${s.keyQuestions.join(", ")}\n`;
+      md += `- **Enfoque:** ${s.recommendedAngle} | **Duración:** ${s.suggestedDuration}\n\n`;
+    });
+
+    navigator.clipboard.writeText(md);
+    addToast("Esquema Copiado", "La secuencia completa de subtemas fue copiada en Markdown.", "info");
+  };
+
+  const handleAddCustomSubtopic = () => {
+    if (!decomposition) return;
+    const nextSeq = decomposition.subtopics.length + 1;
+    const newSub: SubtopicItem = {
+      sequenceNumber: nextSeq,
+      title: `Subtema Personalizado #${nextSeq}`,
+      description: "Define aquí los aspectos clave que deseas abordar en esta entrega adicional.",
+      keyQuestions: ["¿Cuáles son las implicaciones principales?", "¿Qué caso práctico respalda esto?"],
+      suggestedDuration: "3-5 min",
+      recommendedAngle: "Caso de Estudio",
+      keywords: [contentType],
+    };
+    setDecomposition({
+      ...decomposition,
+      subtopics: [...decomposition.subtopics, newSub],
+    });
+    addToast("Subtema Añadido", `Se incorporó el subtema #${nextSeq} a la secuencia.`, "success");
+  };
+
+  const handleRemoveSubtopic = (idx: number) => {
+    if (!decomposition) return;
+    const updated = decomposition.subtopics.filter((_, i) => i !== idx).map((s, i) => ({
+      ...s,
+      sequenceNumber: i + 1,
+    }));
+    setDecomposition({
+      ...decomposition,
+      subtopics: updated,
+    });
+    addToast("Subtema Eliminado", "Se reordenó la secuencia.", "info");
+  };
+
+  const handleSaveSubtopicEdit = (idx: number) => {
+    if (!decomposition) return;
+    const updated = [...decomposition.subtopics];
+    updated[idx] = {
+      ...updated[idx],
+      title: editedTitle.trim() || updated[idx].title,
+      description: editedDesc.trim() || updated[idx].description,
+    };
+    setDecomposition({
+      ...decomposition,
+      subtopics: updated,
+    });
+    setEditingSubtopicIdx(null);
+    addToast("Cambios Guardados", "Se actualizó el subtema en la secuencia.", "success");
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Search Input Panel */}
@@ -162,21 +356,51 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
             Investigación SourceFinder
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Módulo de inteligencia y filtro de reputación en tiempo real.
+            Módulo de inteligencia y análisis secuencial de temas en tiempo real.
           </p>
+        </div>
+
+        {/* Mode Switcher Tabs */}
+        <div className="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+          <button
+            onClick={() => setMode("direct")}
+            className={`py-1.5 px-2 rounded font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mode === "direct"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Investigar Tema</span>
+          </button>
+          <button
+            onClick={() => setMode("sequential")}
+            className={`py-1.5 px-2 rounded font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mode === "sequential"
+                ? "bg-indigo-600 text-white shadow-2xs ring-1 ring-indigo-400"
+                : "text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Serie Secuencial</span>
+          </button>
         </div>
 
         <div className="space-y-4 text-xs">
           <div>
             <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
-              Tema a Investigar
+              {mode === "sequential" ? "Tema Principal de la Serie" : "Tema a Investigar"}
             </label>
             <textarea
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               rows={3}
-              placeholder="Ej: Nuevo chip M4 Pro de Apple o avances en IA..."
-              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 min-h-[100px] sm:min-h-[130px]"
+              placeholder={
+                mode === "sequential"
+                  ? "Ej: Inteligencia Artificial Generativa, Finanzas Personales desde cero, Historia de Roma..."
+                  : "Ej: Nuevo chip M4 Pro de Apple o avances en IA..."
+              }
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[90px] sm:min-h-[110px]"
             />
           </div>
 
@@ -197,80 +421,126 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
             </select>
           </div>
 
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">
-                Umbral Mínimo
-              </label>
-              <span className="font-mono font-bold text-slate-900">{(minReputation * 100).toFixed(0)}%</span>
-            </div>
-            <input
-              type="range"
-              min="0.3"
-              max="0.9"
-              step="0.05"
-              value={minReputation}
-              onChange={(e) => setMinReputation(parseFloat(e.target.value))}
-              className="w-full accent-slate-900 cursor-pointer"
-            />
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              Fuentes con puntaje menor serán automáticamente descartadas del informe.
-            </p>
-          </div>
-
-          {/* Live Monitoring Toggle */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isLiveMonitoring ? "bg-emerald-500 animate-ping" : "bg-slate-400"}`} />
-              <div>
-                <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">Monitoreo en Vivo (Live)</span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400">Actualiza automáticamente cada 30s</span>
+          {mode === "sequential" ? (
+            <div className="p-3.5 bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 rounded-xl space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="font-bold text-indigo-950 dark:text-indigo-200 text-xs flex items-center gap-1.5">
+                  <ListOrdered className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  Número de Subtemas / Entregas:
+                </label>
+                <span className="font-mono font-extrabold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-xs">
+                  {subtopicCount} Entregas
+                </span>
               </div>
+              <input
+                type="range"
+                min="3"
+                max="8"
+                step="1"
+                value={subtopicCount}
+                onChange={(e) => setSubtopicCount(parseInt(e.target.value))}
+                className="w-full accent-indigo-600 cursor-pointer"
+              />
+              <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300/80 leading-relaxed">
+                La IA analizará el tema principal y estructurará una secuencia de subtemas ordenados con hilo conductor e identidad compartida.
+              </p>
+
+              <button
+                onClick={handleDecomposeTopic}
+                disabled={decomposing || !topic.trim()}
+                className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold rounded-lg text-xs flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
+              >
+                {decomposing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Analizando Tema e Hilo Conductor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4 text-indigo-200 animate-pulse" />
+                    <span>Descomponer en Secuencia (IA)</span>
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={() => setIsLiveMonitoring(!isLiveMonitoring)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                isLiveMonitoring
-                  ? "bg-emerald-500 text-white"
-                  : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
-              }`}
-            >
-              {isLiveMonitoring ? "Activo" : "Inactivo"}
-            </button>
-          </div>
+          ) : (
+            <>
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">
+                    Umbral Mínimo Reputación
+                  </label>
+                  <span className="font-mono font-bold text-slate-900">{(minReputation * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.3"
+                  max="0.9"
+                  step="0.05"
+                  value={minReputation}
+                  onChange={(e) => setMinReputation(parseFloat(e.target.value))}
+                  className="w-full accent-slate-900 cursor-pointer"
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Fuentes con puntaje menor serán descartadas.
+                </p>
+              </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleResearch()}
-              disabled={loading || !topic.trim()}
-              className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2 transition-colors shadow-2xs uppercase tracking-wider"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Investigando...
-                </>
-              ) : (
-                <>
-                  <Search className="w-3.5 h-3.5" />
-                  Investigar
-                </>
-              )}
-            </button>
+              {/* Live Monitoring Toggle */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${isLiveMonitoring ? "bg-emerald-500 animate-ping" : "bg-slate-400"}`} />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">Monitoreo en Vivo (Live)</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Actualiza automáticamente cada 30s</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsLiveMonitoring(!isLiveMonitoring)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    isLiveMonitoring
+                      ? "bg-emerald-500 text-white"
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                  }`}
+                >
+                  {isLiveMonitoring ? "Activo" : "Inactivo"}
+                </button>
+              </div>
 
-            <button
-              onClick={() => {
-                setTopic("TENDENCIAS");
-                handleResearch("TENDENCIAS");
-              }}
-              disabled={loading}
-              className="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs"
-              title="Escanea tendencias con Analista de Señales v2.0"
-            >
-              <TrendingUp className="w-3.5 h-3.5" />
-              Tendencias
-            </button>
-          </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleResearch()}
+                  disabled={loading || !topic.trim()}
+                  className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2 transition-colors shadow-2xs uppercase tracking-wider cursor-pointer"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Investigando...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3.5 h-3.5" />
+                      Investigar
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTopic("TENDENCIAS");
+                    handleResearch("TENDENCIAS");
+                  }}
+                  disabled={loading}
+                  className="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  title="Escanea tendencias con Analista de Señales v2.0"
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Tendencias
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Source Filter Pipeline Stats */}
@@ -294,12 +564,249 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
         )}
       </div>
 
-      {/* Report & Source Audit Output */}
+      {/* Report & Source Audit / Sequential Material Output */}
       <div className="lg:col-span-8 space-y-6">
         {error && (
           <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Sequential Topic Material Breakdown View */}
+        {mode === "sequential" && decomposition && (
+          <div className="bg-white dark:bg-slate-900 border border-indigo-200/90 dark:border-indigo-900/80 rounded-2xl p-5 sm:p-6 shadow-xs space-y-6 transition-colors">
+            {/* Header: Series Title & Narrative Identity */}
+            <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white p-5 rounded-xl space-y-4 shadow-sm border border-indigo-800/80">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg">
+                    <Layers className="w-5 h-5 text-indigo-400" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-300 block">
+                      Serie Secuencial de Contenido
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                      {decomposition.suggestedSeriesTitle}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    onClick={handleBatchInvestigateAll}
+                    disabled={batchInvestigating}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Investiga todos los subtemas para generar un informe maestro"
+                  >
+                    {batchInvestigating ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Investigando Lote...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Investigar Serie Completa</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleCopySequenceMarkdown}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
+                    title="Copiar estructura completa en Markdown"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-indigo-300" />
+                    <span>Esquema</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-indigo-950/70 border border-indigo-800/60 rounded-lg text-xs space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                  Identidad Narrativa & Hilo Conductor:
+                </span>
+                <p className="text-indigo-100 font-medium leading-relaxed">
+                  {decomposition.narrativeIdentity}
+                </p>
+                {decomposition.targetAudience && (
+                  <div className="pt-1 flex items-center gap-2 text-[11px] text-indigo-300">
+                    <span className="font-bold">Audiencia Objetivo:</span>
+                    <span className="bg-indigo-900/80 px-2 py-0.5 rounded border border-indigo-700 font-mono text-[10px] text-indigo-200">
+                      {decomposition.targetAudience}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* List of Sequential Subtopics */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs border-b border-slate-200 dark:border-slate-800 pb-2">
+                <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ListOrdered className="w-4 h-4 text-indigo-500" />
+                  <span>Subtemas e Hitos de la Secuencia ({decomposition.subtopics.length} Módulos)</span>
+                </h4>
+                <button
+                  onClick={handleAddCustomSubtopic}
+                  className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-indigo-600 dark:text-indigo-300 rounded font-bold flex items-center gap-1 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 text-[11px]"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Añadir Módulo</span>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {decomposition.subtopics.map((sub, idx) => {
+                  const isEditing = editingSubtopicIdx === idx;
+                  const isCurrentActive = activeSubtopicIdx === idx;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
+                        isCurrentActive
+                          ? "bg-indigo-50/70 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-400/50 shadow-xs"
+                          : "bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2.5 flex-1">
+                          <span className="px-2.5 py-1 bg-indigo-600 text-white font-black text-[11px] rounded-lg shrink-0 shadow-2xs font-mono">
+                            #{sub.sequenceNumber}
+                          </span>
+
+                          <div className="space-y-1 flex-1">
+                            {isEditing ? (
+                              <div className="space-y-2 pt-0.5">
+                                <input
+                                  type="text"
+                                  value={editedTitle}
+                                  onChange={(e) => setEditedTitle(e.target.value)}
+                                  className="w-full px-2.5 py-1 bg-white dark:bg-slate-900 border border-indigo-400 rounded text-xs font-bold"
+                                />
+                                <textarea
+                                  value={editedDesc}
+                                  onChange={(e) => setEditedDesc(e.target.value)}
+                                  rows={2}
+                                  className="w-full px-2.5 py-1 bg-white dark:bg-slate-900 border border-indigo-400 rounded text-xs"
+                                />
+                                <div className="flex gap-2 justify-end pt-1">
+                                  <button
+                                    onClick={() => setEditingSubtopicIdx(null)}
+                                    className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-[10px] font-bold"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={() => handleSaveSubtopicEdit(idx)}
+                                    className="px-2.5 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold"
+                                  >
+                                    Guardar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <h5 className="font-bold text-slate-900 dark:text-white text-sm">
+                                  {sub.title}
+                                </h5>
+                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
+                                  {sub.description}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {!isEditing && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => {
+                                setEditingSubtopicIdx(idx);
+                                setEditedTitle(sub.title);
+                                setEditedDesc(sub.description);
+                              }}
+                              className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                              title="Editar este subtema"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveSubtopic(idx)}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer"
+                              title="Eliminar de la secuencia"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Key questions or points */}
+                      {sub.keyQuestions && sub.keyQuestions.length > 0 && (
+                        <div className="p-2.5 bg-white dark:bg-slate-900/80 rounded-lg border border-slate-200/80 dark:border-slate-800 space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                            Puntos Clave / Preguntas a Cubrir:
+                          </span>
+                          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-slate-700 dark:text-slate-300">
+                            {sub.keyQuestions.map((q, qIdx) => (
+                              <li key={qIdx} className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                <span className="truncate">{q}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Footer tags and Actions */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold text-[10px] rounded border border-indigo-200 dark:border-indigo-800">
+                            {sub.recommendedAngle}
+                          </span>
+                          <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono font-semibold text-[10px] rounded">
+                            ⏱️ {sub.suggestedDuration}
+                          </span>
+                          {sub.keywords?.map((kw, kwIdx) => (
+                            <span key={kwIdx} className="text-[10px] font-mono text-slate-400">
+                              #{kw}
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleInvestigateSubtopic(sub, idx)}
+                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Search className="w-3 h-3" />
+                            <span>Investigar Subtema</span>
+                          </button>
+
+                          {onUseReportForScript && (
+                            <button
+                              onClick={() => {
+                                const subContext = `SUBTEMA #${sub.sequenceNumber}: ${sub.title}\n${sub.description}\nPuntos clave: ${sub.keyQuestions.join("; ")}\nEnfoque: ${sub.recommendedAngle}`;
+                                onUseReportForScript(subContext);
+                              }}
+                              className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer border border-indigo-200 dark:border-indigo-800"
+                            >
+                              <FileText className="w-3 h-3 text-indigo-500" />
+                              <span>Usar en Guion</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
@@ -597,15 +1104,23 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
               </div>
             )}
           </div>
-        ) : (
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-12 text-center text-slate-500 space-y-3">
-            <Search className="w-10 h-10 text-slate-300 mx-auto" />
-            <h3 className="font-semibold text-slate-700 text-sm">Esperando Investigación</h3>
-            <p className="text-xs max-w-md mx-auto text-slate-500">
-              Ingresa un tema arriba y haz clic en &quot;Generar Informe de Inteligencia&quot; para ejecutar la búsqueda verificada y calificación de fuentes.
+        ) : mode === "direct" ? (
+          <div className="bg-slate-50 dark:bg-slate-900/50 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-500 space-y-3">
+            <Search className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto" />
+            <h3 className="font-semibold text-slate-700 dark:text-slate-300 text-sm">Esperando Investigación</h3>
+            <p className="text-xs max-w-md mx-auto text-slate-500 dark:text-slate-400">
+              Ingresa un tema arriba y haz clic en &quot;Investigar&quot; para ejecutar la búsqueda verificada y calificación de fuentes.
             </p>
           </div>
-        )}
+        ) : !decomposition ? (
+          <div className="bg-slate-50 dark:bg-slate-900/50 border-2 border-dashed border-indigo-200/80 dark:border-indigo-900/50 rounded-2xl p-12 text-center text-indigo-950 dark:text-indigo-200 space-y-3">
+            <Layers className="w-10 h-10 text-indigo-400 mx-auto animate-bounce" />
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">Descomposición y Secuencia de Contenido</h3>
+            <p className="text-xs max-w-md mx-auto text-slate-500 dark:text-slate-400 leading-relaxed">
+              Introduce un tema principal en el panel izquierdo (ej: &quot;Inteligencia Artificial Generativa&quot;) y presiona <strong className="text-indigo-600 dark:text-indigo-400">Descomponer en Secuencia</strong> para que la IA estructure los subtemas, hilo conductor e identidad de la serie.
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

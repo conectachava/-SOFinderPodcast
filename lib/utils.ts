@@ -10,7 +10,29 @@ export async function safeFetchJson<T = any>(
   init?: RequestInit
 ): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
   try {
-    const res = await fetch(input, init);
+    const headers = new Headers(init?.headers || {});
+    if (!headers.has("x-aistudio-client")) {
+      headers.set("x-aistudio-client", "sourcefinder-app");
+    }
+
+    try {
+      const { auth } = await import("./firebase");
+      if (auth?.currentUser && !headers.has("Authorization")) {
+        const token = await auth.currentUser.getIdToken().catch(() => null);
+        if (token) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+      }
+    } catch {
+      // Ignore auth token retrieval errors
+    }
+
+    const modifiedInit: RequestInit = {
+      ...init,
+      headers,
+    };
+
+    const res = await fetch(input, modifiedInit);
     const contentType = res.headers.get("content-type") || "";
     const text = await res.text();
 

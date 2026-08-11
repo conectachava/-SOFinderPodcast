@@ -24,6 +24,10 @@ export function validateAiApiCredentials(req?: NextRequest): ApiValidationResult
 
   const headers: Record<string, string> = {
     "User-Agent": "aistudio-build",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   };
 
   if (useVertex) {
@@ -53,16 +57,27 @@ export function validateAiApiCredentials(req?: NextRequest): ApiValidationResult
 }
 
 /**
- * Wrapper for API Route handlers to ensure credentials validation and header injection.
+ * Wrapper for API Route handlers to ensure credentials validation,
+ * security header injection, and protection against unauthorized external calls.
  */
 export function withAiApiValidation(
   handler: (req: NextRequest, validation: ApiValidationResult) => Promise<NextResponse>
 ) {
   return async (req: NextRequest) => {
+    // 1. Verify User Agent to reject automated scanner tools
+    const userAgent = req.headers.get("user-agent") || "";
+    if (/sqlmap|nikto|nmap|zgrab|masscan|dirbuster|gobuster|w3af|openvas/i.test(userAgent)) {
+      return NextResponse.json(
+        { error: "Forbidden: Security scanner blocked" },
+        { status: 403 }
+      );
+    }
+
     const validation = validateAiApiCredentials(req);
     if (!validation.isValid && validation.errorResponse) {
       return validation.errorResponse;
     }
+
     const response = await handler(req, validation);
 
     Object.entries(validation.headers).forEach(([key, value]) => {
@@ -72,3 +87,4 @@ export function withAiApiValidation(
     return response;
   };
 }
+

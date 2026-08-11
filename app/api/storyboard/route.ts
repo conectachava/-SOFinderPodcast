@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,7 @@ const MOCK_STORYBOARD: StoryboardData = {
   ],
 };
 
-export async function POST(req: NextRequest) {
+export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
     const { scriptText, scriptLines } = await req.json();
 
@@ -158,4 +159,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

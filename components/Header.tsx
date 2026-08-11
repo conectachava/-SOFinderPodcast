@@ -66,13 +66,13 @@ export function Header({
       format: "Debate" as const,
     },
     {
-      label: "⚡ iPhone 15 Pro & Earnings",
-      topic: "Lanzamiento de iPhone 15 Pro y Reporte de Ganancias Apple",
-      contentType: "Noticia Tecnológica",
+      label: "🧠 Revolución IA & Era Post-Laboral",
+      topic: "Revolución de la Inteligencia Artificial Generativa: Agentes Autónomos, AGI y el Futuro del Trabajo",
+      contentType: "Análisis Profundo",
       format: "Debate" as const,
     },
     {
-      label: "⚡ NVIDIA Blackwell RTX 5090",
+      label: "⚡ NVIDIA Blackwell & Supercomputación AI",
       topic: "Lanzamiento de NVIDIA Blackwell RTX 5090 y Mercado de GPUs AI",
       contentType: "Análisis de Producto",
       format: "Análisis" as const,

@@ -101,4 +101,15 @@ export function getAdminAuth(): Auth {
   return cachedAuth;
 }
 
+export async function verifyIdToken(idToken: string) {
+  try {
+    const auth = getAdminAuth();
+    const decodedToken = await auth.verifyIdToken(idToken);
+    return decodedToken;
+  } catch (err) {
+    console.warn('[Firebase Admin] Verify ID token error/warning:', err);
+    return null;
+  }
+}
+
 

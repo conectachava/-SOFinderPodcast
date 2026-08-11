@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ interface CallerConfig {
   accent?: string;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
     const {
       intelligenceReport,
@@ -252,4 +253,4 @@ ${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
       { status: 500 }
     );
   }
-}
+});

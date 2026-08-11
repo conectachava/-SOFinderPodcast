@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { Type } from "@google/genai";
 import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
 import type { ScriptLine } from "@/app/api/script-writer/route";
+import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
     const { rawScript, lines } = await req.json();
 
@@ -165,4 +166,4 @@ ${scriptTextToRefine}
       { status: 500 }
     );
   }
-}
+});

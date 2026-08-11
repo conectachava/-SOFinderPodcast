@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
     const { topic, contentType = "General", showFormat = "Debate", durationMinutes = 3 } = await req.json();
 
@@ -14,10 +15,21 @@ export async function POST(req: NextRequest) {
     const protocol = host.includes("localhost") ? "http" : "https";
     const baseUrl = `${protocol}://${host}`;
 
+    const internalHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-aistudio-client": "sourcefinder-app",
+      "x-internal-token": "internal-orchestrator",
+    };
+
+    const clientAuthHeader = req.headers.get("authorization");
+    if (clientAuthHeader) {
+      internalHeaders["authorization"] = clientAuthHeader;
+    }
+
     // Step 1: SourceFinder
     const sfRes = await fetch(`${baseUrl}/api/source-finder`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalHeaders,
       body: JSON.stringify({ topic, contentType }),
     });
 
@@ -32,7 +44,7 @@ export async function POST(req: NextRequest) {
     // Step 2: ScriptWriter
     const swRes = await fetch(`${baseUrl}/api/script-writer`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalHeaders,
       body: JSON.stringify({
         intelligenceReport: sfData.report,
         showFormat,
@@ -53,7 +65,7 @@ export async function POST(req: NextRequest) {
     try {
       const sbRes = await fetch(`${baseUrl}/api/storyboard`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: internalHeaders,
         body: JSON.stringify({
           scriptText: swData.rawScript,
           scriptLines: swData.lines,
@@ -74,7 +86,7 @@ export async function POST(req: NextRequest) {
     try {
       const caRes = await fetch(`${baseUrl}/api/cover-art`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: internalHeaders,
         body: JSON.stringify({
           topic,
           scriptText: swData.rawScript,
@@ -112,4 +124,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

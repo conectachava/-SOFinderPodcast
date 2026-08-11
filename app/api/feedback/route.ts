@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { withAiApiValidation } from "@/lib/middleware";
 
-export async function POST(req: NextRequest) {
+export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { topic, type, format, scriptRating, audioRating, comments } = body;
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 export async function GET() {
   try {

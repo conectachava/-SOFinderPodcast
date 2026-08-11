@@ -173,12 +173,12 @@ import {
 } from "recharts";
 
 const SAMPLE_LINES_FOR_ANALYTICS: ScriptLine[] = [
-  { id: "s1", speaker: "Paul", speakerRole: "host", text: "Bienvenidos a SourceFinder Pod. Hoy analizaremos el lanzamiento del iPhone 15 Pro y sus implicaciones financieras.", sentiment: "neutral", gender: "Male", accent: "British", timestamp: "0:00" },
-  { id: "s2", speaker: "Sarah", speakerRole: "caller", text: "¡El chip A17 Bionic y el acabado de titanio marcan un salto tecnológico increíble para Apple!", sentiment: "enthusiastic", gender: "Female", accent: "American", timestamp: "0:15" },
-  { id: "s3", speaker: "David", speakerRole: "caller", text: "Sin embargo, los analistas expresan cautela ante el incremento de precios en modelos Pro Max.", sentiment: "concerned", gender: "Male", accent: "British", timestamp: "0:30" },
-  { id: "s4", speaker: "Paul", speakerRole: "host", text: "¿Cómo afectará esto las proyecciones de ingresos por servicios en el próximo trimestre?", sentiment: "neutral", gender: "Male", accent: "British", timestamp: "0:45" },
-  { id: "s5", speaker: "Sarah", speakerRole: "caller", text: "Los ingresos en servicios alcanzaron máximos históricos, superando las estimaciones de Wall Street.", sentiment: "enthusiastic", gender: "Female", accent: "American", timestamp: "1:00" },
-  { id: "s6", speaker: "David", speakerRole: "caller", text: "Es un punto válido, pero la presión regulatoria europea plantea desafíos de cumplimiento inmediatos.", sentiment: "concerned", gender: "Male", accent: "British", timestamp: "1:15" },
+  { id: "s1", speaker: "Paul", speakerRole: "host", text: "Bienvenidos a SourceFinder Pod. Hoy iniciamos una serie especial sobre la Revolución de la IA Generativa, Agentes Autónomos y AGI.", sentiment: "neutral", gender: "Male", accent: "British", timestamp: "0:00" },
+  { id: "s2", speaker: "Sarah", speakerRole: "caller", text: "¡El avance hacia agentes capaces de razonar en múltiples pasos cambia por completo la productividad global!", sentiment: "enthusiastic", gender: "Female", accent: "American", timestamp: "0:15" },
+  { id: "s3", speaker: "David", speakerRole: "caller", text: "Sin embargo, expertos en gobernanza señalan riesgos críticos de seguridad y el impacto en el mercado laboral.", sentiment: "concerned", gender: "Male", accent: "British", timestamp: "0:30" },
+  { id: "s4", speaker: "Paul", speakerRole: "host", text: "¿Qué modelos económicos o políticas de renta básica se proyectan para afrontar esta transición?", sentiment: "neutral", gender: "Male", accent: "British", timestamp: "0:45" },
+  { id: "s5", speaker: "Sarah", speakerRole: "caller", text: "Las empresas pioneras ya están integrando flujos autónomos en tiempo real con ganancias de eficiencia exponenciales.", sentiment: "enthusiastic", gender: "Female", accent: "American", timestamp: "1:00" },
+  { id: "s6", speaker: "David", speakerRole: "caller", text: "Es un gran avance, pero la regulación internacional sobre atribución y ética debe actuar de inmediato.", sentiment: "concerned", gender: "Male", accent: "British", timestamp: "1:15" },
 ];
 
 function ScriptAnalyticsPanel({ lines }: { lines: ScriptLine[] }) {
@@ -462,7 +462,7 @@ export function ScriptStudioView({
 
   const [reportText, setReportText] = useState(
     initialReport ||
-      `## Resumen Ejecutivo\nEl nuevo iPhone 15 Pro ha sido lanzado con críticas positivas por su procesador A17 Bionic y cuerpo de titanio, impulsando además ingresos récord en la división de servicios de Apple.\n\n## Puntos Clave\n- El iPhone 15 Pro integra el chip A17 Bionic con arquitectura de 3nm.\n- Apple reportó ingresos superiores a las proyecciones de Wall Street.\n- Transición oficial a puerto USB-C y botón de acción personalizable.\n\n## Puntos de Debate\n- Cuestionamientos sobre si el aumento de precio en el modelo Pro Max está justificado.\n- Preocupaciones de analistas sobre el ritmo de renovación en el mercado de smartphones.\n\n## Fuentes Verificadas\n- https://www.theverge.com/2023/10/30/iphone-15-pro-review\n- https://www.techcrunch.com/2023/11/01/apple-earnings-report`
+      `## Resumen Ejecutivo\nLa Revolución de la Inteligencia Artificial Generativa y la llegada de los Agentes Autónomos está redefiniendo el desarrollo tecnológico, la productividad económica y las estructuras laborales globales. Esta serie aborda el impacto de la AGI desde los fundamentos hasta la transformación ética y económica.\n\n## Puntos Clave\n- Evolución acelerada de modelos lingüísticos a sistemas agénticos con razonamiento autónomo.\n- Integración de IA en la toma de decisiones empresariales y automatización de procesos complejos.\n- Debate sobre sostenibilidad de infraestructura energética y supercomputación.\n\n## Puntos de Debate\n- Estrategias de adaptación para profesionales y reestructuración del mercado laboral.\n- Desafíos de gobernanza internacional, seguridad y alineación de la IA.\n\n## Fuentes Verificadas\n- https://arxiv.org/abs/ai-agents-survey\n- https://www.mit.edu/technology-review-ai-future`
   );
 
   const [showFormat, setShowFormat] = useState<"Debate" | "Análisis" | "Opinión">("Debate");
