@@ -138,6 +138,7 @@ export default function Home() {
   // Modals & Drawers state
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [profileTab, setProfileTab] = useState<"profile" | "analytics" | "voice" | "tokens" | "diagnostic" | "admin">("profile");
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isHelpGuideOpen, setIsHelpGuideOpen] = useState<boolean>(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
@@ -493,7 +494,14 @@ export default function Home() {
             onOpenHistory={() => {
               setIsHistoryOpen(true);
             }}
-            onOpenProfile={() => setIsProfileOpen(true)}
+            onOpenProfile={() => {
+              setProfileTab("profile");
+              setIsProfileOpen(true);
+            }}
+            onOpenDiagnostic={() => {
+              setProfileTab("diagnostic");
+              setIsProfileOpen(true);
+            }}
             onOpenTutorial={() => setIsTutorialOpen(true)}
             onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
@@ -641,6 +649,7 @@ export default function Home() {
         <UserProfileModal
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
+          initialTab={profileTab}
           onClearSession={handleClearSession}
           showGridOverlay={showGridOverlay}
           onToggleGridOverlay={setShowGridOverlay}

@@ -6,6 +6,53 @@ export interface GeminiClientOptions {
 }
 
 /**
+ * Utility function to convert raw Gemini/Google API errors into clean, readable messages.
+ */
+export function formatGeminiError(err: any): string {
+  if (!err) return "Error desconocido en el servicio de AI.";
+
+  let rawMsg = typeof err === "string" ? err : err.message || "";
+
+  // Attempt parsing stringified JSON error objects from Google API
+  if (typeof rawMsg === "string" && rawMsg.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(rawMsg);
+      if (parsed?.error?.message) {
+        rawMsg = parsed.error.message;
+      }
+      if (
+        parsed?.error?.status === "INVALID_ARGUMENT" ||
+        parsed?.error?.details?.[0]?.reason === "API_KEY_INVALID"
+      ) {
+        return "Clave de API de Gemini no válida. Por favor, configure una GEMINI_API_KEY válida en la sección de Configuración (Settings) de la aplicación.";
+      }
+    } catch {
+      // Ignore JSON parse failures
+    }
+  }
+
+  const lower = String(rawMsg).toLowerCase();
+
+  if (
+    lower.includes("api key not valid") ||
+    lower.includes("api_key_invalid") ||
+    lower.includes("please pass a valid api key")
+  ) {
+    return "Clave de API de Gemini no válida. Por favor, asegúrate de configurar GEMINI_API_KEY en la sección de Configuración (Settings) de la aplicación.";
+  }
+
+  if (
+    lower.includes("quota") ||
+    lower.includes("rate limit") ||
+    lower.includes("resource_exhausted")
+  ) {
+    return "Se ha alcanzado la cuota de peticiones de Gemini. Por favor, inténtalo de nuevo en unos momentos.";
+  }
+
+  return rawMsg || "Falló la comunicación con los servicios de Gemini AI.";
+}
+
+/**
  * Returns an instance of GoogleGenAI configured for either Vertex AI or standard API Key authentication.
  * Leverages the centralized factory function in lib/vertex-ai.ts.
  */
@@ -47,7 +94,7 @@ export async function generateContentWithFallback(
       err?.code === 400;
 
     if (isApiKeyError && !options?.forceVertex) {
-      console.warn("[Gemini Client Warning]: Standard API key rejected. Retrying with Vertex AI (Vertex AI credits)...");
+      console.warn("[Gemini Client Warning]: Standard API key rejected. Retrying with Vertex AI...");
       try {
         const vertexClient = getGeminiClient({ forceVertex: true });
         return await vertexClient.models.generateContent({
@@ -57,11 +104,11 @@ export async function generateContentWithFallback(
         });
       } catch (vertexErr: any) {
         console.warn("[Vertex AI Fallback Notice]:", vertexErr?.message || vertexErr);
-        throw vertexErr;
+        throw new Error(formatGeminiError(vertexErr));
       }
     }
 
-    throw err;
+    throw new Error(formatGeminiError(err));
   }
 }
 
@@ -76,6 +123,7 @@ export function isVertexAiActive(): boolean {
     Boolean(process.env.GCP_PROJECT)
   );
 }
+
 
 
 

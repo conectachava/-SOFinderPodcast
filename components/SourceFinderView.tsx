@@ -1,18 +1,24 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Shield, Filter, RefreshCw, Copy, Check, ExternalLink, AlertTriangle, FileText, Sparkles, TrendingUp, BarChart3, Quote, Link2, BookmarkCheck, Layers, ListOrdered, Wand2, Plus, Trash2, Edit3, ArrowRight, BookOpen, Share2, Play } from "lucide-react";
+import { Search, Shield, Filter, RefreshCw, Copy, Check, ExternalLink, AlertTriangle, FileText, Sparkles, TrendingUp, BarChart3, Quote, Link2, BookmarkCheck, Layers, ListOrdered, Wand2, Plus, Trash2, Edit3, ArrowRight, BookOpen, Share2, Play, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SourceBadge } from "./SourceBadge";
+import { SmartSummary } from "./SmartSummary";
 import { useToast } from "./Toast";
 import type { SignalAnalysisResult } from "@/app/api/source-finder/route";
 import type { TopicDecompositionResult, SubtopicItem } from "@/app/api/topic-decomposer/route";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
 import { safeFetchJson } from "@/lib/utils";
+import { useAuth } from "@/app/AuthProvider";
+import { db } from "@/lib/firebase";
+import { doc, serverTimestamp } from "firebase/firestore";
+import { safeSetDoc } from "@/lib/firebase";
 
 export function SourceFinderView({ onUseReportForScript }: { onUseReportForScript?: (report: string) => void }) {
   const { addToast } = useToast();
+  const { user } = useAuth();
 
   const [mode, setMode] = useState<"direct" | "sequential">("direct");
   const [topic, setTopic] = useState("Revolución de la Inteligencia Artificial Generativa: Agentes Autónomos, AGI y el Futuro del Trabajo");
@@ -162,6 +168,43 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
     setCopied(true);
     addToast("Copiado", "Informe copiado al portapapeles.", "info");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExport = async (format: "pdf" | "txt") => {
+    if (!report) return;
+    try {
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, content: report, format }),
+      });
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${topic.replace(/ /g, "_")}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      addToast("Exportación", `Informe exportado como ${format.toUpperCase()}`, "success");
+    } catch (e) {
+      addToast("Error", "Error al exportar el archivo", "error");
+    }
+  };
+
+  const handleSaveReport = async () => {
+    if (!report || !user) return;
+    try {
+      await safeSetDoc(doc(db, "users", user.uid, "reports", Date.now().toString()), {
+        topic,
+        content: report,
+        createdAt: serverTimestamp(),
+      });
+      addToast("Guardado", "Informe guardado en tu perfil.", "success");
+    } catch (e) {
+      addToast("Error", "Error al guardar el informe", "error");
+    }
   };
 
   // Handler to decompose topic into logical subtopic sequence
@@ -565,7 +608,8 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
       </div>
 
       {/* Report & Source Audit / Sequential Material Output */}
-      <div className="lg:col-span-8 space-y-6">
+      <div className="lg:col-span-6 space-y-6">
+        <SmartSummary report={report} />
         {error && (
           <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -891,6 +935,29 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
                   <span>{isCitingActive ? "Citas Activas" : "Citar Fuentes"}</span>
                 </button>
 
+                <button
+                  onClick={handleSaveReport}
+                  disabled={!user}
+                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-bold flex items-center gap-1 transition-colors border border-indigo-200"
+                  title="Guardar informe en tu perfil"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  Guardar
+                </button>
+                <button
+                  onClick={() => handleExport("pdf")}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium flex items-center gap-1 transition-colors border border-slate-200"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF
+                </button>
+                <button
+                  onClick={() => handleExport("txt")}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium flex items-center gap-1 transition-colors border border-slate-200"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  TXT
+                </button>
                 <button
                   onClick={handleCopy}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium flex items-center gap-1 transition-colors border border-slate-200"

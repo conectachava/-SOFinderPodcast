@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
@@ -308,7 +308,7 @@ ${topicToResearch} ha emergido como la tendencia principal tras el análisis mul
   } catch (error: any) {
     console.error("Error in SourceFinder API:", error);
     return NextResponse.json(
-      { error: error?.message || "Internal server error during intelligence gathering" },
+      { error: formatGeminiError(error) },
       { status: 500 }
     );
   }

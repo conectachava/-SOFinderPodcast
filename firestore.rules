@@ -80,6 +80,19 @@ service cloud.firestore {
         && data.updatedAt is string;
     }
 
+    function isValidReport(data) {
+      return data.keys().hasAll(['topic', 'content', 'createdAt'])
+        && data.keys().size() <= 5
+        && data.topic is string && data.topic.size() <= 500
+        && data.content is string;
+    }
+
+    function isValidSavedTopic(data) {
+      return data.keys().hasAll(['topic', 'createdAt'])
+        && data.keys().size() <= 3
+        && data.topic is string && data.topic.size() <= 500;
+    }
+
     match /admins/{userId} {
       allow read: if isSignedIn();
     }
@@ -113,6 +126,18 @@ service cloud.firestore {
         allow read, list: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming());
         allow update: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'duration', 'sourceUrls', 'topic']);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /reports/{reportId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidId(reportId) && isValidReport(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /savedTopics/{topicId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidId(topicId) && isValidSavedTopic(incoming());
         allow delete: if isOwner(userId) || isAdmin();
       }
     }

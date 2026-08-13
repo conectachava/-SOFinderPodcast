@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Terminal, Shield, AlertTriangle, CheckCircle2, X, RefreshCw, Copy, Trash2, Activity, Wifi, ChevronDown, ChevronUp, Bug, Play } from "lucide-react";
+import { Terminal, Shield, AlertTriangle, CheckCircle2, X, RefreshCw, Copy, Trash2, Activity, Wifi, ChevronDown, ChevronUp, Bug, Play, Zap, Cpu } from "lucide-react";
 import { logger, LogEntry, LogLevel } from "@/lib/logger";
 import { useToast } from "./Toast";
+import { GeminiStatusBadge } from "./GeminiStatusBadge";
 
 export function DevHealthConsole() {
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -144,6 +145,38 @@ export function DevHealthConsole() {
     addToast("Error Simulado", "Se ha registrado un error de prueba en la consola central.", "warning");
   };
 
+  const handleTestGeminiApi = async () => {
+    addToast("Probando Gemini API", "Enviando solicitud de prueba al endpoint...", "info");
+    try {
+      const model = (typeof window !== "undefined" && localStorage.getItem("sf_preferred_gemini_model")) || "gemini-2.5-flash";
+      const res = await fetch("/api/test-gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        logger.info(`[GEMINI_API_OK] Conexión exitosa con Gemini API (${data.modelTested}, latencia ${data.latencyMs}ms). Muestra: ${data.outputSample}`, {
+          model: data.modelTested,
+          latencyMs: data.latencyMs,
+          mode: data.mode,
+        }, "GeminiApi");
+        addToast("Gemini API OK", `Conexión exitosa (${data.latencyMs}ms)`, "success");
+      } else {
+        logger.error(`[GEMINI_API_FAIL] Error de conexión con Gemini API: ${data.error}`, {
+          model: data.modelTested,
+          rawError: data.rawError,
+        }, "GeminiApi");
+        addToast("Error Gemini API", data.error || "Fallo de conexión", "error");
+      }
+    } catch (e: any) {
+      logger.error(`[GEMINI_API_ERROR] Excepción de red al probar Gemini API: ${e?.message}`, {
+        error: String(e),
+      }, "GeminiApi");
+      addToast("Error de Red", e?.message || "Excepción de petición", "error");
+    }
+  };
+
   const handleSimulateSaveFail = () => {
     logger.error("[FS_SAVE_FAIL] Error al guardar documento borrador en Firestore: Permiso denegado o timeout de escritura.", {
       doc: "users/currentSession/drafts",
@@ -247,6 +280,9 @@ export function DevHealthConsole() {
         {/* Expanded Body */}
         {!isMinimized && (
           <div className="p-3 space-y-3">
+            {/* Real-Time Gemini API Health Ping Indicator */}
+            <GeminiStatusBadge variant="console" />
+
             {/* Filter Controls & Actions */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
               <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
@@ -277,6 +313,15 @@ export function DevHealthConsole() {
               </div>
 
               <div className="flex items-center gap-1.5 ml-auto">
+                <button
+                  onClick={handleTestGeminiApi}
+                  className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/80 text-emerald-300 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Probar llamada en vivo a la Gemini API"
+                >
+                  <Zap className="w-3 h-3 text-emerald-400" />
+                  <span>Test Gemini API</span>
+                </button>
+
                 <button
                   onClick={handleSimulateTestError}
                   className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer"

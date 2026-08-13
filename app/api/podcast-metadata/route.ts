@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Type } from "@google/genai";
-import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
@@ -126,7 +126,7 @@ Requisitos de Salida:
   } catch (error: any) {
     console.error("Error generating podcast metadata:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to generate podcast metadata" },
+      { error: formatGeminiError(error) },
       { status: 500 }
     );
   }

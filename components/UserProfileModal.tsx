@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal } from "lucide-react";
+import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal, Cpu } from "lucide-react";
 import { signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 import { auth, db, clearFirestoreAuthCache } from "@/lib/firebase";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useAuth, UserProfileWithStatus } from "../app/AuthProvider";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
+import { GeminiDiagnosticView } from "./GeminiDiagnosticView";
 
 export interface UserProfile {
   name: string;
@@ -39,6 +40,7 @@ interface UserProfileModalProps {
   onToggleSystemSync?: (val: boolean) => void;
   themeSchedule?: boolean;
   onToggleThemeSchedule?: (val: boolean) => void;
+  initialTab?: "profile" | "analytics" | "voice" | "tokens" | "diagnostic" | "admin";
 }
 
 export function UserProfileModal({
@@ -51,14 +53,41 @@ export function UserProfileModal({
   onToggleSystemSync,
   themeSchedule = false,
   onToggleThemeSchedule,
+  initialTab,
 }: UserProfileModalProps) {
   const { user, profile: authProfile, isAdmin, setProfile } = useAuth();
   const [localProfile, setLocalProfile] = useState<UserProfileWithStatus | null>(authProfile);
-  const [activeTab, setActiveTab] = useState<"profile" | "analytics" | "voice" | "tokens" | "admin">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "analytics" | "voice" | "tokens" | "diagnostic" | "admin">(
+    initialTab || "profile"
+  );
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
   const [userPlan, setUserPlan] = useState<"Free" | "Pro" | "Studio">("Pro");
   const [tokenBalance, setTokenBalance] = useState<number>(4250);
   const [pendingUsers, setPendingUsers] = useState<UserProfileWithStatus[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Preferred Gemini AI Model state
+  const [preferredAiModel, setPreferredAiModel] = useState<string>(() => {
+    if (typeof window === "undefined") return "gemini-2.5-flash";
+    try {
+      return localStorage.getItem("sf_preferred_gemini_model") || "gemini-2.5-flash";
+    } catch {
+      return "gemini-2.5-flash";
+    }
+  });
+
+  const handleModelChange = (modelId: string) => {
+    setPreferredAiModel(modelId);
+    try {
+      localStorage.setItem("sf_preferred_gemini_model", modelId);
+    } catch {}
+  };
 
   // Development Health Check Console state
   const [devHealthConsoleActive, setDevHealthConsoleActive] = useState<boolean>(() => {
@@ -460,6 +489,13 @@ export function UserProfileModal({
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               Plan & Tokens
+            </button>
+            <button
+              onClick={() => setActiveTab("diagnostic")}
+              className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${activeTab === "diagnostic" ? "text-slate-900 border-b-2 border-slate-900 dark:text-white dark:border-white" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-emerald-500" />
+              Diagnóstico IA
             </button>
             {isAdmin && (
               <button
@@ -932,6 +968,8 @@ export function UserProfileModal({
                 </button>
               </div>
             </div>
+          ) : activeTab === "diagnostic" ? (
+            <GeminiDiagnosticView />
           ) : activeTab === "profile" ? (
             <div className="space-y-5">
               {/* Account Card */}
@@ -998,6 +1036,36 @@ export function UserProfileModal({
 
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Preferencias de Estudio</h4>
                   
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                        Modelo de IA Preferido (Gemini)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("diagnostic")}
+                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Cpu className="w-3 h-3 text-emerald-500" />
+                        Probar Conexión / Diagnóstico
+                      </button>
+                    </div>
+                    <select
+                      value={preferredAiModel}
+                      onChange={(e) => handleModelChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500 font-medium"
+                    >
+                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultrarrápido - Recomendado)</option>
+                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Razonamiento Complejo)</option>
+                      <option value="gemini-1.5-flash">Gemini 1.5 Flash (Compatibilidad Legada)</option>
+                      <option value="gemini-1.5-pro">Gemini 1.5 Pro (Legado Pro)</option>
+                      <option value="gemini-2.0-flash">Gemini 2.0 Flash (Experimental 2.0)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Permite verificar si un error de autenticación o cuota está ligado a un modelo específico o a la clave de API.
+                    </p>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Formato por Defecto</label>
                     <select

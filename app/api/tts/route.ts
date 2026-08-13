@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient } from "@/lib/gemini";
+import { generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,9 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Text is required for TTS" }, { status: 400 });
     }
 
-    const ai = getGeminiClient();
-
     let config: any = {
       responseModalities: ["AUDIO"],
     };
-
 
     if (multiSpeaker && Array.isArray(speakers) && speakers.length >= 2) {
       config.speechConfig = {
@@ -38,8 +35,8 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       };
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
+    const response = await generateContentWithFallback({
+      model: "gemini-2.5-flash",
       contents: [{ parts: [{ text }] }],
       config,
     });
@@ -58,11 +55,12 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       audioBase64: audioPart.inlineData.data,
       mimeType: audioPart.inlineData.mimeType || "audio/pcm",
     });
-  } catch {
-    console.log("Notice: Speech generation API encountered an error.");
+  } catch (err: any) {
+    console.error("Notice: Speech generation API error:", err);
     return NextResponse.json(
-      { error: "Speech generation failed." },
+      { error: formatGeminiError(err) },
       { status: 500 }
     );
   }
 });
+

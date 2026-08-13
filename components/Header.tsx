@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database, Sparkles, Home, BarChart3 } from "lucide-react";
 import { UserProfile } from "./UserProfileModal";
 import { useAuth } from "../app/AuthProvider";
+import { GeminiStatusBadge } from "./GeminiStatusBadge";
 
 export type TabType = "landing" | "orchestrator" | "sourcefinder" | "script" | "studio" | "storyboard" | "analytics" | "docs";
 
@@ -27,6 +28,7 @@ interface HeaderProps {
   syncStatus?: "saved" | "saving" | "idle";
   isFirestoreConnected?: boolean;
   onOpenSnapshotRestore?: () => void;
+  onOpenDiagnostic?: () => void;
 }
 
 export function Header({
@@ -47,7 +49,8 @@ export function Header({
   onExportProject,
   syncStatus = "saved",
   isFirestoreConnected = true,
-  onOpenSnapshotRestore
+  onOpenSnapshotRestore,
+  onOpenDiagnostic,
 }: HeaderProps) {
   const { user, profile: userProfile } = useAuth();
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -249,6 +252,9 @@ export function Header({
                 </>
               )}
             </div>
+
+            {/* Real-time Gemini API Status Badge */}
+            <GeminiStatusBadge variant="compact" onOpenDiagnostic={onOpenDiagnostic} />
 
             {onExportProject && (
               <button

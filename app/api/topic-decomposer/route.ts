@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateContentWithFallback } from "@/lib/gemini";
+import { generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
@@ -110,7 +110,7 @@ DEBES responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
     return NextResponse.json(
       {
         ok: false,
-        error: error.message || "Error al descomponer el tema en secuencia de subtemas.",
+        error: formatGeminiError(error),
       },
       { status: 500 }
     );

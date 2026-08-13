@@ -2,11 +2,6 @@ import { initializeApp, getApps, getApp, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 let rawFirebaseConfig: Record<string, any> = {};
-try {
-  rawFirebaseConfig = require('../firebase-applet-config.json');
-} catch {
-  rawFirebaseConfig = {};
-}
 
 const projectId = (
   process.env.FIREBASE_PROJECT_ID ||

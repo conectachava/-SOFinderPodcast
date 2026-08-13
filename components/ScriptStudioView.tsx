@@ -926,8 +926,10 @@ export function ScriptStudioView({
     }
   }, [historyIndex, historyStack, addToast]);
 
-  React.useEffect(() => {
+  // Keyboard Shortcuts for speaker and line management
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Undo/Redo
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
@@ -935,10 +937,43 @@ export function ScriptStudioView({
         e.preventDefault();
         handleRedo();
       }
+
+      if (!isFocusMode) return; 
+
+      // Alt + ArrowUp/Down to reorder
+      if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        const direction = e.key === "ArrowUp" ? -1 : 1;
+        const newIndex = focusedLineIndex + direction;
+        if (newIndex >= 0 && newIndex < parsedLines.length) {
+          const newLines = [...parsedLines];
+          const temp = newLines[focusedLineIndex];
+          newLines[focusedLineIndex] = newLines[newIndex];
+          newLines[newIndex] = temp;
+          setParsedLines(newLines);
+          setFocusedLineIndex(newIndex);
+          addToast("Reordenado", "Línea movida de posición.", "info");
+        }
+      }
+
+      // Tab to cycle speaker
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const speakers = PREDEFINED_VOICE_PROFILES.map(p => p.speaker);
+        const currentSpeaker = parsedLines[focusedLineIndex].speaker;
+        const nextSpeakerIndex = (speakers.indexOf(currentSpeaker) + 1) % speakers.length;
+        const nextSpeaker = speakers[nextSpeakerIndex];
+        
+        const newLines = [...parsedLines];
+        newLines[focusedLineIndex] = { ...newLines[focusedLineIndex], speaker: nextSpeaker };
+        setParsedLines(newLines);
+        addToast("Locutor Actualizado", `Locutor cambiado a ${nextSpeaker}.`, "success");
+      }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [parsedLines, focusedLineIndex, isFocusMode, addToast, handleUndo, handleRedo]);
 
   // Collaborative notes & comments state
   const [comments, setComments] = useState<{ id: string; section: string; author: string; text: string; time: string }[]>([

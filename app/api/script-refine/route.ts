@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Type } from "@google/genai";
-import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { withAiApiValidation } from "@/lib/middleware";
 
@@ -162,7 +162,7 @@ ${scriptTextToRefine}
   } catch (error: any) {
     console.error("Error in Smart Refine API:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to smart refine script." },
+      { error: formatGeminiError(error) },
       { status: 500 }
     );
   }

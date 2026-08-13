@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient, generateContentWithFallback } from "@/lib/gemini";
+import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
@@ -249,7 +249,7 @@ ${customHostName}: Excelente perspectiva de ambos. Gracias por acompañarnos.`;
   } catch (error: any) {
     console.error("Error in ScriptWriter API:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to generate radio script." },
+      { error: formatGeminiError(error) },
       { status: 500 }
     );
   }
