@@ -7,10 +7,7 @@ export function SmartSummary({ report }: { report: string | null }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!report) {
-      setTakeaways([]);
-      return;
-    }
+    if (!report) return;
 
     const fetchSummary = async () => {
       setLoading(true);

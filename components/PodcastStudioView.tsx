@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import React, { useState, useEffect, useRef } from "react";
 import {
   Play,
@@ -906,9 +907,11 @@ export function PodcastStudioView({
             {/* Thematic Cover Art Display */}
             <div className="relative group shrink-0">
               {coverArt ? (
-                <img
+                <Image
                   src={coverArt}
                   alt={`Portada de ${topic}`}
+                  width={96}
+                  height={96}
                   referrerPolicy="no-referrer"
                   className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover border border-slate-700 shadow-md group-hover:opacity-90 transition-opacity"
                 />

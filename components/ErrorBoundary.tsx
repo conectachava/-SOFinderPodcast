@@ -117,6 +117,15 @@ export class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  public handleGranularReload = () => {
+    // Reset local error state
+    this.setState({ hasError: false, error: null });
+    // Execute reset prop if provided to trigger internal state reset of children
+    if (this.props.onReset) {
+      this.props.onReset();
+    }
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -222,17 +231,10 @@ export class ErrorBoundary extends Component<Props, State> {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
             <button
-              onClick={() => {
-                this.setState({ hasError: false, error: null, reportSuccess: false });
-                if (this.props.onReset) {
-                  this.props.onReset();
-                } else {
-                  window.location.reload();
-                }
-              }}
+              onClick={this.handleGranularReload}
               className="w-full sm:w-auto px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-medium text-xs rounded-xl transition-colors shadow-sm cursor-pointer"
             >
-              🔄 Restablecer Módulo
+              🔄 Recargar Módulo
             </button>
             <button
               onClick={() => {
@@ -240,17 +242,17 @@ export class ErrorBoundary extends Component<Props, State> {
                   localStorage.clear();
                   sessionStorage.clear();
                 } catch (e) {}
-                this.setState({ hasError: false, error: null });
                 window.location.href = "/";
               }}
               className="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
-              ⚡ System Reset (Limpiar Caché y Reiniciar)
+              ⚡ System Reset (Reiniciar todo)
             </button>
           </div>
         </div>
       );
     }
+
 
     return this.props.children;
   }

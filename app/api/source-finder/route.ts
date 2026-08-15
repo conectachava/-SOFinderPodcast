@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { RateLimiter } from "limiter";
+import reputationMap from "@/config/reputation-map.json";
 import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
+
+// --- CONFIGURACIÓN DEL RATE LIMITER ---
+const limiter = new RateLimiter({ tokensPerInterval: 10, interval: 900000 });
 
 export const dynamic = "force-dynamic";
 
@@ -37,21 +42,21 @@ const STRATEGIES: Record<string, { query_modifier: string; default_min_reputatio
   "General": { query_modifier: "informe noticias contexto", default_min_reputation: 0.5 },
 };
 
-function getDomainReputation(urlStr: string): number {
+function getDomainReputation(urlStr: string): { score: number; tier: string } {
   try {
-    const parsed = new URL(urlStr);
-    const host = parsed.hostname.toLowerCase();
-    
-    if (host.includes("bbc.") || host.includes("reuters.") || host.includes("apnews.") || host.includes("bloomberg.")) return 0.95;
-    if (host.includes("theverge.") || host.includes("techcrunch.") || host.includes("wired.") || host.includes("wsj.") || host.includes("nytimes.")) return 0.92;
-    if (host.includes("variety.") || host.includes("people.") || host.includes("tmz.")) return 0.82;
-    if (host.includes("wikipedia.") || host.includes("github.") || host.includes("nature.") || host.includes("mit.edu")) return 0.88;
-    if (host.includes("reddit.com") || host.includes("medium.com") || host.includes("sub-stack")) return 0.55;
-    if (host.includes("blog") || host.includes("unverified") || host.includes("xyz")) return 0.25;
-    
-    return 0.75;
-  } catch {
-    return 0.5;
+    const domain = new URL(urlStr).hostname.replace('www.', '');
+
+    for (const [tier, config] of Object.entries(reputationMap)) {
+      if (tier !== 'default_unverified' && (config as any).domains.some((d: string) => domain.includes(d))) {
+        return { score: (config as any).score, tier: tier };
+      }
+    }
+
+    // Si no se encuentra en ninguna lista, devuelve el score por defecto
+    return { score: (reputationMap as any).default_unverified.score, tier: 'unverified' };
+  } catch (error) {
+    console.error("Error al parsear URL para reputación:", urlStr);
+    return { score: 0.1, tier: 'error_parsing' }; // Score muy bajo si la URL es inválida
   }
 }
 
@@ -159,10 +164,24 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
 
 export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
+    // --- IMPLEMENTACIÓN DEL RATE LIMITER ---
+    const remainingRequests = await limiter.removeTokens(1);
+    if (remainingRequests < 0) {
+      return NextResponse.json(
+        { status: "error", message: "Demasiadas peticiones. Inténtalo más tarde." },
+        { status: 429 }
+      );
+    }
+
     const { topic: inputTopic, contentType = "General", customMinReputation } = await req.json();
 
     if (!inputTopic || typeof inputTopic !== "string") {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
+    }
+
+    // --- SANITIZACIÓN DE ENTRADA ---
+    if (inputTopic.length > 200) {
+        return NextResponse.json({ status: "error", message: "El tema de investigación es demasiado largo." }, { status: 400 });
     }
 
     let topicToResearch = inputTopic.trim();
@@ -238,16 +257,16 @@ Analiza críticamente la información y sé sumamente veraz. Evita sesgos y clic
         for (const chunk of chunks) {
           if (chunk.web?.uri) {
             const domain = new URL(chunk.web.uri).hostname;
-            const rep = getDomainReputation(chunk.web.uri);
-            const isQual = rep >= minReputation;
+            const repData = getDomainReputation(chunk.web.uri);
+            const isQual = repData.score >= minReputation;
             const item: SourceItem = {
               url: chunk.web.uri,
               title: chunk.web.title || `Fuente (${domain})`,
               snippet: `Información obtenida de ${domain} para ${topicToResearch}`,
               domain,
-              source_reputation: rep,
+              source_reputation: repData.score,
               qualified: isQual,
-              rejection_reason: isQual ? undefined : `Reputación (${rep}) inferior al mínimo (${minReputation})`,
+              rejection_reason: isQual ? undefined : `Reputación (${repData.score}) inferior al mínimo (${minReputation})`,
             };
             rawSources.push(item);
             if (isQual) qualifiedSources.push(item);

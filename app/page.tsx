@@ -13,10 +13,9 @@ import { RetentionDashboardView } from "@/components/RetentionDashboardView";
 import { generateAutoTags } from "@/lib/ai-tagger";
 import { LandingHero } from "@/components/LandingHero";
 import { LandingHeader } from "@/components/LandingHeader";
-import { ToastProvider } from "@/components/Toast";
 import { PipelineProgress } from "@/components/PipelineProgress";
 import { RecentDrawer, PodcastHistoryItem } from "@/components/RecentDrawer";
-import { UserProfileModal, UserProfile } from "@/components/UserProfileModal";
+import { UserProfileModal } from "@/components/UserProfileModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HelpGuideDrawer } from "@/components/HelpGuideDrawer";
@@ -28,12 +27,11 @@ import { AuthRequiredModal } from "@/components/AuthRequiredModal";
 import { SnapshotRestoreModal, ProjectSnapshot } from "@/components/SnapshotRestoreModal";
 import { ProjectExportModal } from "@/components/ProjectExportModal";
 import type { ScriptLine } from "@/app/api/script-writer/route";
-import { Shield, Sparkles, Activity, RotateCw, ArrowRight } from "lucide-react";
 import { useAuth } from "./AuthProvider";
-import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-
 import { useToast } from "@/components/Toast";
+import { useThemeConfig } from "@/hooks/useThemeConfig";
 
 function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "idle" }) {
   const { addToast } = useToast();
@@ -52,77 +50,7 @@ function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "id
 export default function Home() {
   const { user, profile: userProfile, loading, ready, authStatus, retryAuth, forceUnblockLoading, clearAuthCache } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("landing");
-
-  const [systemSync, setSystemSync] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("sf_system_sync") === "true";
-    } catch (e) {
-      return false;
-    }
-  });
-
-  const [themeSchedule, setThemeSchedule] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("sf_theme_schedule") === "true";
-    } catch (e) {
-      return false;
-    }
-  });
-
-  // Theme state (light / dark)
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try {
-      const isSync = localStorage.getItem("sf_system_sync") === "true";
-      if (isSync && typeof window !== "undefined") {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      }
-      const isSchedule = localStorage.getItem("sf_theme_schedule") === "true";
-      if (isSchedule) {
-        const hour = new Date().getHours();
-        return (hour >= 18 || hour < 6) ? "dark" : "light";
-      }
-      return (localStorage.getItem("sf_theme") as "light" | "dark") || "light";
-    } catch (e) {
-      return "light";
-    }
-  });
-
-  useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    try {
-      localStorage.setItem("sf_theme", theme);
-    } catch (e) {}
-  }, [theme]);
-
-  useEffect(() => {
-    if (systemSync) {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handler = (e: MediaQueryListEvent) => {
-        setTheme(e.matches ? "dark" : "light");
-      };
-      mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
-    }
-  }, [systemSync]);
-
-  useEffect(() => {
-    if (themeSchedule) {
-      // Check every minute
-      const interval = setInterval(() => {
-        const hour = new Date().getHours();
-        setTheme((hour >= 18 || hour < 6) ? "dark" : "light");
-      }, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [themeSchedule]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-  };
+  const { theme, toggleTheme, systemSync, setSystemSync, themeSchedule, setThemeSchedule } = useThemeConfig();
 
   // Shared state across views
   const [reportText, setReportText] = useState<string | undefined>(undefined);
@@ -203,19 +131,6 @@ export default function Home() {
       // For now we just reset local state, but they would reload on next snapshot
     }
   };
-
-  // Load state from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedTheme = localStorage.getItem("sf_theme");
-      if (savedTheme === "dark" || savedTheme === "light") {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setTheme(savedTheme);
-      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        setTheme("dark");
-      }
-    } catch (e) {}
-  }, []);
 
   // Load draft from Firestore on user login
   useEffect(() => {
@@ -473,7 +388,7 @@ export default function Home() {
   return (
     <>
       <AutosaveNotifier syncStatus={syncStatus} />
-      <div className="min-h-screen flex flex-col bg-slate-100/80 dark:bg-slate-950 transition-colors duration-200">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-400">
         {activeTab === "landing" ? (
           <LandingHeader
             onLaunchStudio={() => setActiveTab("orchestrator")}

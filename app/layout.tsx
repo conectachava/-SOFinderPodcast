@@ -8,6 +8,7 @@ import { GlobalErrorHandler } from '@/components/GlobalErrorHandler';
 import { SystemStatusProvider, SystemStatusBanner } from '@/components/SystemStatusBanner';
 import { DevHealthConsole } from '@/components/DevHealthConsole';
 import { DynamicSeoHead } from '@/components/DynamicSeoHead';
+import { ThemeDebugger } from '@/components/ThemeDebugger';
 
 export const viewport: Viewport = {
   themeColor: '#0f172a',
@@ -98,7 +99,8 @@ const jsonLdSchema = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="es" className="scroll-smooth">
-      <body suppressHydrationWarning className="antialiased selection:bg-indigo-500 selection:text-white">
+      <body suppressHydrationWarning className="antialiased selection:bg-indigo-500 selection:text-white bg-white dark:bg-slate-950">
+        <ThemeDebugger />
         <DynamicSeoHead />
         <script
           id="json-ld-schema"

@@ -1,0 +1,21 @@
+{
+  "top_tier_news": {
+    "domains": ["bbc.com", "reuters.com", "apnews.com", "bloomberg.com"],
+    "score": 0.95
+  },
+  "tech_press": {
+    "domains": ["wired.com", "theverge.com", "techcrunch.com"],
+    "score": 0.92
+  },
+  "entertainment": {
+    "domains": ["variety.com", "hollywoodreporter.com", "tmz.com"],
+    "score": 0.82
+  },
+  "community": {
+    "domains": ["reddit.com", "medium.com", "substack.com"],
+    "score": 0.55
+  },
+  "default_unverified": {
+    "score": 0.20
+  }
+}

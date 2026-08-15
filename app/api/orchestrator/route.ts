@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { withAiApiValidation } from "@/lib/middleware";
+import { OrchestratorResponseSchema } from "@/lib/schemas";
+
+// --- ESQUEMAS DE VALIDACIÓN (Validation Gates) ---
+const SourceFinderReportSchema = z.object({
+  report: z.string().min(50, { message: "El informe de inteligencia parece demasiado corto o corrupto." }),
+});
+
+const ScriptWriterOutputSchema = z.object({
+  rawScript: z.string().min(50, { message: "El guion generado parece demasiado corto o corrupto." }),
+});
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +52,20 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       throw new Error(`SourceFinder step failed: ${sfData.error || sfRes.statusText || "Server error"}`);
     }
 
+    // V A L I D A T I O N   G A T E   #1
+    const validation1 = SourceFinderReportSchema.safeParse(sfData);
+    if (!validation1.success) {
+      console.error("Validation Gate 1 falló:", validation1.error.message);
+      throw new Error(`El informe del SourceFinder no superó la validación: ${validation1.error.message}`);
+    }
+    const informeValidado = validation1.data.report;
+
     // Step 2: ScriptWriter
     const swRes = await fetch(`${baseUrl}/api/script-writer`, {
       method: "POST",
       headers: internalHeaders,
       body: JSON.stringify({
-        intelligenceReport: sfData.report,
+        intelligenceReport: informeValidado,
         showFormat,
         durationMinutes,
       }),
@@ -60,6 +79,14 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       throw new Error(`ScriptWriter step failed: ${swData.error || swRes.statusText || "Server error"}`);
     }
 
+    // V A L I D A T I O N   G A T E   #2
+    const validation2 = ScriptWriterOutputSchema.safeParse(swData);
+    if (!validation2.success) {
+      console.error("Validation Gate 2 falló:", validation2.error.message);
+      throw new Error(`El guion generado no superó la validación: ${validation2.error.message}`);
+    }
+    const guionValidado = validation2.data.rawScript;
+
     // Step 3: Storyboard Generator (Flow Video)
     let storyboardData = null;
     try {
@@ -67,7 +94,7 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
         method: "POST",
         headers: internalHeaders,
         body: JSON.stringify({
-          scriptText: swData.rawScript,
+          scriptText: guionValidado,
           scriptLines: swData.lines,
         }),
       });
@@ -89,7 +116,7 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
         headers: internalHeaders,
         body: JSON.stringify({
           topic,
-          scriptText: swData.rawScript,
+          scriptText: guionValidado,
         }),
       });
 
@@ -101,26 +128,33 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       console.warn("Cover art generation step skipped/warning:", caErr);
     }
 
-    return NextResponse.json({
+    const result = {
       topic,
       contentType,
       showFormat,
       durationMinutes,
-      intelligenceReport: sfData.report,
+      intelligenceReport: informeValidado,
+      scriptText: guionValidado,
+      scriptLines: swData.lines || [],
+      wordCount: swData.wordCount || 0,
+    };
+    
+    // Validate with Zod
+    const validatedData = OrchestratorResponseSchema.parse(result);
+
+    return NextResponse.json({
+      ...validatedData,
       qualifiedSources: sfData.qualifiedSources,
       rawSources: sfData.rawSources,
-      scriptText: swData.rawScript,
-      scriptLines: swData.lines,
       storyboard: storyboardData,
       coverArtUrl,
       estimatedDuration: swData.estimatedDuration,
-      wordCount: swData.wordCount,
       timestamp: new Date().toISOString(),
     });
-  } catch {
-    console.log("Notice: Orchestrator workflow handled error gracefully.");
+  } catch (err: any) {
+    console.error("Pipeline orchestration failed:", err);
     return NextResponse.json(
-      { error: "Pipeline orchestration failed" },
+      { error: "Pipeline orchestration failed", details: err.message },
       { status: 500 }
     );
   }

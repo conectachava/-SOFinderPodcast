@@ -21,10 +21,10 @@
   --gcp-blue: #8ab4f8;
   --gcp-blue-hover: #aecbfa;
   --gcp-blue-light: #1c2b46;
-  --gcp-neutral-bg: #1f1f1f;
-  --gcp-neutral-border: #3c4043;
-  --gcp-text-primary: #e8eaed;
-  --gcp-text-secondary: #9aa0a6;
+  --gcp-neutral-bg: #020617; /* Deep slate-950 */
+  --gcp-neutral-border: #334155; /* Slate-700 equivalent */
+  --gcp-text-primary: #f1f5f9; /* Slate-100 */
+  --gcp-text-secondary: #94a3b8; /* Slate-400 */
 }
 
 /* Smooth cross-fade transition for light / dark mode theme switching */
@@ -50,12 +50,12 @@ input,
 select,
 textarea,
 article {
-  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              fill 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              stroke 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              fill 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              stroke 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {

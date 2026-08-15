@@ -58,7 +58,7 @@ export function OrchestratorView({
   const [tags, setTags] = useState<string[]>(["Tecnología", "IA"]);
   const [customTagInput, setCustomTagInput] = useState("");
 
-  const presetTagSuggestions = ["Tecnología", "IA", "Cripto", "Noticias", "Análisis", "Entrevista", "Estrategia", "Futurismo"];
+  const presetTagSuggestions = ["Tecnología", "IA", "Cripto", "Noticias", "Análisis", "Entrevista", "Estrategia", "Futurismo", "Tech", "Politics", "Lifestyle"];
 
   const handleAddTag = (tagToAdd: string) => {
     const trimmed = tagToAdd.trim().replace(/^#/, "");
@@ -204,7 +204,7 @@ export function OrchestratorView({
     orchestratorRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleRunPipeline = async () => {
+    const handleRunPipeline = async () => {
     if (!isApproved) {
       addToast("Acceso Denegado", authMessage || "No tienes permisos.", "error");
       return;
