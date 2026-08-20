@@ -6,8 +6,17 @@ export function ThemeDebugger() {
 
   useEffect(() => {
     const checkTheme = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-      setTheme(isDark ? 'dark' : 'light');
+      // Auto-detect system preference
+      const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      // Apply theme class
+      if (isSystemDark) {
+        document.documentElement.classList.add('dark');
+        setTheme('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        setTheme('light');
+      }
 
       // Log computed background colors
       const bodyBg = window.getComputedStyle(document.body).backgroundColor;
@@ -15,7 +24,7 @@ export function ThemeDebugger() {
       const mainBg = mainElement ? window.getComputedStyle(mainElement).backgroundColor : 'n/a';
       
       console.log('--- Theme Debugger ---');
-      console.log('Theme:', isDark ? 'dark' : 'light');
+      console.log('System Theme Applied:', isSystemDark ? 'dark' : 'light');
       console.log('Body background:', bodyBg);
       console.log('Main background:', mainBg);
     };

@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 let rawFirebaseConfig: Record<string, any> = {};
 
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
 
 export const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 /**
  * Utilitario para limpiar la caché de autenticación y persistencia de Firestore/Firebase.

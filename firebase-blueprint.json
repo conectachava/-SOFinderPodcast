@@ -12,7 +12,8 @@
         "episodesCount": { "type": "number" },
         "updatedAt": { "type": "string", "description": "Server timestamp" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
-        "isAdmin": { "type": "boolean" }
+        "isAdmin": { "type": "boolean" },
+        "monthlyTokenUsage": { "type": "number", "description": "Tokens consumed in current month" }
       },
       "required": ["name", "email", "status"]
     },

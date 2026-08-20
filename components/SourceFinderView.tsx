@@ -35,6 +35,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
   const [hoveredSourceIndex, setHoveredSourceIndex] = useState<number | null>(null);
   const [isCitingActive, setIsCitingActive] = useState<boolean>(false);
   const [activeCitationIndex, setActiveCitationIndex] = useState<number | null>(null);
+  const [groundingMode, setGroundingMode] = useState<"speed" | "depth">("speed");
 
   // Sequential mode state
   const [subtopicCount, setSubtopicCount] = useState<number>(4);
@@ -111,6 +112,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
           topic: targetTopic,
           contentType,
           customMinReputation: minReputation,
+          groundingMode,
         }),
       });
 
@@ -147,7 +149,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
     } finally {
       setLoading(false);
     }
-  }, [topic, contentType, minReputation, addToast]);
+  }, [topic, contentType, minReputation, addToast, groundingMode]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -447,6 +449,25 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
             />
           </div>
 
+          <div>
+            <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
+              Modo de Investigación (Advanced Grounding)
+            </label>
+            <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+              <button
+                className={`flex-1 py-1 text-[10px] font-bold rounded ${groundingMode === 'speed' ? 'bg-white dark:bg-slate-700 shadow-xs' : 'text-slate-500'}`}
+                onClick={() => setGroundingMode('speed')}
+              >
+                Velocidad
+              </button>
+              <button
+                className={`flex-1 py-1 text-[10px] font-bold rounded ${groundingMode === 'depth' ? 'bg-white dark:bg-slate-700 shadow-xs' : 'text-slate-500'}`}
+                onClick={() => setGroundingMode('depth')}
+              >
+                Profundidad
+              </button>
+            </div>
+          </div>
           <div>
             <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5">
               Estrategia / Tipo de Contenido

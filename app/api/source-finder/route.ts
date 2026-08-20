@@ -4,6 +4,8 @@ import { RateLimiter } from "limiter";
 import reputationMap from "@/config/reputation-map.json";
 import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
+import { db } from "@/lib/firebase";
+import { doc, updateDoc, increment } from "firebase/firestore";
 
 // --- CONFIGURACIÓN DEL RATE LIMITER ---
 const limiter = new RateLimiter({ tokensPerInterval: 10, interval: 900000 });
@@ -173,7 +175,7 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       );
     }
 
-    const { topic: inputTopic, contentType = "General", customMinReputation } = await req.json();
+    const { topic: inputTopic, contentType = "General", customMinReputation, groundingMode = "speed" } = await req.json();
 
     if (!inputTopic || typeof inputTopic !== "string") {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
@@ -216,6 +218,7 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
 
         const searchPrompt = `
 Eres un sub-agente experto en investigación y calificación de fuentes de información (SourceFinder Agent v2.0).
+${groundingMode === 'depth' ? 'MODO PROFUNDIDAD: Realiza una investigación exhaustiva, detallada, contrastando múltiples perspectivas y fuentes de alta fiabilidad.' : 'MODO VELOCIDAD: Realiza una investigación rápida y concisa, enfocada en los datos más relevantes de inmediato.'}
 ${signalAnalysis ? `MODO ANALISTA DE SEÑALES ACTIVADO: Tendencia detectada con Fuerza ${signalAnalysis.strength} y Diversidad ${signalAnalysis.diversity}: "${topicToResearch}".` : ""}
 Investiga el tema: "${topicToResearch}".
 Categoría: ${contentType}.
