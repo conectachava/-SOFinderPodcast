@@ -1,5 +1,4 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
 import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 let rawFirebaseConfig: Record<string, any> = {};
@@ -18,20 +17,13 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
 
 export const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
-export const auth = getAuth(app);
 export const storage = getStorage(app);
 
 /**
- * Utilitario para limpiar la caché de autenticación y persistencia de Firestore/Firebase.
- * Resuelve bucles infinitos de "verificando sesión" causados por tokens expirados o estado local corrupto.
+ * Utilitario para limpiar la caché de persistencia de Firestore.
  */
 export async function clearFirestoreAuthCache(): Promise<boolean> {
   try {
-    // 1. Intentar cerrar sesión en Firebase Auth
-    if (auth) {
-      await auth.signOut().catch(() => {});
-    }
-
     // 2. Limpiar IndexedDB de Firestore y Firebase Auth local storage
     if (typeof window !== "undefined" && window.indexedDB) {
       try {

@@ -2,9 +2,8 @@
 
 import React from "react";
 import { ShieldAlert, X, Sparkles, User } from "lucide-react";
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { useToast } from "./Toast";
+import { useAuth } from "../app/AuthProvider";
 
 interface AuthRequiredModalProps {
   isOpen: boolean;
@@ -14,14 +13,14 @@ interface AuthRequiredModalProps {
 
 export function AuthRequiredModal({ isOpen, onClose, featureName = "esta función avanzada" }: AuthRequiredModalProps) {
   const { addToast } = useToast();
+  const { loginWithGoogle } = useAuth();
 
   if (!isOpen) return null;
 
   const handleGoogleLogin = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      addToast("Autenticación Exitosa", "Has iniciado sesión correctamente.", "success");
+      await loginWithGoogle();
+      addToast("Autenticación Iniciada", "Redirigiendo al Hub...", "success");
       onClose();
     } catch (error) {
       console.error(error);

@@ -2,9 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal, Cpu } from "lucide-react";
-import { signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
-import { auth, db, clearFirestoreAuthCache } from "@/lib/firebase";
-import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { useAuth, UserProfileWithStatus } from "../app/AuthProvider";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { GeminiDiagnosticView } from "./GeminiDiagnosticView";
@@ -351,11 +348,11 @@ export function UserProfileModal({
 
   if (!isOpen) return null;
 
+  const { loginWithGoogle } = useAuth();
   const handleLoginRegister = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await loginWithGoogle();
     } catch (error) {
       console.error("Error signing in with Google", error);
     }
@@ -1354,3 +1351,4 @@ export function UserProfileModal({
     </div>
   );
 }
+ 

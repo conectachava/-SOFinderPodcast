@@ -1,34 +1,30 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState } from "react";
-import {
-  onAuthStateChanged,
-  User,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut,
-} from "firebase/auth";
-import { auth, db, clearFirestoreAuthCache } from "@/lib/firebase";
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { UserProfile } from "../components/UserProfileModal";
 
 export type AuthStatus = "checking" | "authenticated" | "unauthenticated";
 
 export interface UserProfileWithStatus extends UserProfile {
   status: "pending" | "approved" | "rejected";
-  uid?: string; // Used for admin panel
+  uid?: string;
+}
+
+export interface HubUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  isAnonymous: boolean;
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: HubUser | null;
   loading: boolean;
   ready: boolean;
   authStatus: AuthStatus;
   profile: UserProfileWithStatus | null;
   isAdmin: boolean;
   setProfile: (profile: Partial<UserProfileWithStatus>) => Promise<void>;
-  loginWithGoogle: () => Promise<User | null>;
+  loginWithGoogle: () => Promise<HubUser | null>;
   logout: () => Promise<void>;
   retryAuth: () => void;
   forceUnblockLoading: () => void;
@@ -58,14 +54,13 @@ const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | 
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<HubUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [ready, setReady] = useState<boolean>(false);
-
+  
   const authStatus: AuthStatus = (!ready || loading) ? "checking" : (user ? "authenticated" : "unauthenticated");
-
+  
   const [profile, setProfileState] = useState<UserProfileWithStatus | null>(null);
-
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   const forceUnblockLoading = React.useCallback(() => {
@@ -74,30 +69,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const retryAuth = React.useCallback(() => {
-    try {
-      const currentUser = auth.currentUser;
-      setUser(currentUser);
-      if (currentUser) {
-        setProfileState({
-          ...defaultProfile,
-          name: currentUser.isAnonymous
-            ? "Invitado"
-            : currentUser.displayName || currentUser.email?.split("@")[0] || "Usuario",
-          email: currentUser.email || "",
-          isLoggedIn: true,
-          status: "approved",
-          uid: currentUser.uid,
-        });
-      }
-    } catch (e) {
-      console.warn("retryAuth notice:", e);
-    } finally {
-      setLoading(false);
-      setReady(true);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (token) {
+      // Create a mock user from token for now
+      const mockUser = { uid: token.substring(0, 20), email: "usuario@vsnrylabs.com", displayName: "Usuario", isAnonymous: false };
+      setUser(mockUser);
+      setProfileState({
+        ...defaultProfile,
+        name: "Usuario",
+        email: "usuario@vsnrylabs.com",
+        isLoggedIn: true,
+        status: "approved",
+        uid: mockUser.uid,
+      });
+      setIsAdmin(true); // default to true for testing
+    } else {
+      setUser(null);
+      setProfileState(null);
+      setIsAdmin(false);
     }
+    setLoading(false);
+    setReady(true);
   }, []);
 
-  const loginWithGoogle = React.useCallback(async (): Promise<User | null> => {
+  const loginWithGoogle = React.useCallback(async (): Promise<HubUser | null> => {
     const APP_ID = "1:438537482408:web:9d43a0f924ed8d4b04529d";
     const HUB_URL = "https://gs.conectachava.com/";
     const returnTo = encodeURIComponent(`${window.location.origin}/callback`);
@@ -111,140 +106,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    let unsubscribeProfile: (() => void) | null = null;
-
-    // Safety fallback timer if Firebase Auth initialization hangs or takes unusually long
-    const safetyTimer = setTimeout(() => {
-      console.log("[AuthProvider] Auth initialization timeout fallback reached.");
-      setLoading(false);
-      setReady(true);
-    }, 2500);
-
-    // Process redirect result if returning from a Google OAuth redirect flow
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          setUser(result.user);
-        }
-      })
-      .catch((error) => {
-        console.warn("Redirect auth result notice:", error);
-      });
-
-    const unsubscribeAuth = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-        clearTimeout(safetyTimer);
-        setUser(currentUser);
-        setLoading(false);
-        setReady(true);
-
-        if (unsubscribeProfile) {
-          unsubscribeProfile();
-          unsubscribeProfile = null;
-        }
-
-        if (currentUser) {
-          const isUserAdmin = currentUser.email === "vsnrylabs@gmail.com";
-          setIsAdmin(isUserAdmin);
-
-          setProfileState((prev) => {
-            if (prev && prev.uid === currentUser.uid) return prev;
-            return {
-              ...defaultProfile,
-              name: currentUser.isAnonymous
-                ? "Invitado"
-                : currentUser.displayName || currentUser.email?.split("@")[0] || "Usuario",
-              email: currentUser.email || "",
-              isLoggedIn: true,
-              status: "approved",
-              uid: currentUser.uid,
-            };
-          });
-
-          try {
-            const adminDocRef = doc(db, "admins", currentUser.uid);
-            getDoc(adminDocRef)
-              .then((adminSnap) => {
-                if (adminSnap.exists()) {
-                  setIsAdmin(true);
-                }
-              })
-              .catch(() => {});
-
-            const userDocRef = doc(db, "users", currentUser.uid);
-            unsubscribeProfile = onSnapshot(
-              userDocRef,
-              (docSnap) => {
-                if (docSnap.exists()) {
-                  setProfileState({
-                    ...(docSnap.data() as UserProfileWithStatus),
-                    isLoggedIn: true,
-                    uid: currentUser.uid,
-                  });
-                } else {
-                  const newProfile: UserProfileWithStatus = {
-                    ...defaultProfile,
-                    name: currentUser.isAnonymous
-                      ? "Invitado"
-                      : currentUser.displayName || currentUser.email?.split("@")[0] || "Usuario",
-                    email: currentUser.email || "",
-                    isLoggedIn: true,
-                    status: "approved",
-                  };
-                  setDoc(userDocRef, {
-                    ...newProfile,
-                    updatedAt: serverTimestamp(),
-                  }).catch(() => {});
-                }
-              },
-              () => {}
-            );
-          } catch (err) {
-            console.warn("Auth background sync notice:", err);
-          }
-        } else {
-          setProfileState(null);
-          setIsAdmin(false);
-        }
-      },
-      (error) => {
-        console.warn("Auth state error:", error);
-        setLoading(false);
-        setReady(true);
-      }
-    );
-
-    return () => {
-      if (unsubscribeProfile) unsubscribeProfile();
-      unsubscribeAuth();
-    };
-  }, []);
+    retryAuth();
+  }, [retryAuth]);
 
   const clearAuthCache = React.useCallback(async () => {
     setLoading(true);
-    try {
-      await clearFirestoreAuthCache();
-      setUser(null);
-      setProfileState(null);
-      setIsAdmin(false);
-    } catch (e) {
-      console.warn("clearAuthCache notice:", e);
-    } finally {
-      setLoading(false);
-      setReady(true);
-    }
+    localStorage.removeItem('auth_token');
+    setUser(null);
+    setProfileState(null);
+    setIsAdmin(false);
+    setLoading(false);
+    setReady(true);
   }, []);
 
   const setProfile = React.useCallback(async (updates: Partial<UserProfileWithStatus>) => {
     if (user && profile) {
-      const userDocRef = doc(db, "users", user.uid);
-      const safeUpdates = { ...updates };
-      delete safeUpdates.status; // Prevent users from updating their own status
-      delete safeUpdates.isLoggedIn;
-      delete safeUpdates.uid;
-      
-      await setDoc(userDocRef, { ...safeUpdates, status: profile.status, updatedAt: serverTimestamp() }, { merge: true });
+      setProfileState(prev => prev ? { ...prev, ...updates } : null);
     }
   }, [user, profile]);
 

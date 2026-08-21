@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: "standalone",
   allowedDevOrigins: [
     'ais-dev-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app',
     'ais-pre-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app'

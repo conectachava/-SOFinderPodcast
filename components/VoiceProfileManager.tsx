@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Sliders, Volume2, Save, RefreshCw, User, Check, Sparkles, Shield, RotateCcw } from "lucide-react";
-import { db, auth, safeSetDoc, safeGetDoc } from "@/lib/firebase";
-import { doc, getDocs, collection } from "firebase/firestore";
 import { useToast } from "./Toast";
+import { useAuth } from "../app/AuthProvider";
 
 export interface VoiceProfileConfig {
   role: "Host" | "Expert" | "Analyst";
@@ -31,40 +30,22 @@ export const AVAILABLE_VOICES = [
 
 export function VoiceProfileManager() {
   const { addToast } = useToast();
+  const { user } = useAuth();
   const [profiles, setProfiles] = useState<Record<string, VoiceProfileConfig>>(DEFAULT_PROFILES);
   const [activeTab, setActiveTab] = useState<"Host" | "Expert" | "Analyst">("Host");
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSavedInFirestore, setIsSavedInFirestore] = useState<boolean>(false);
 
-  // Load profiles from Firestore on mount
+  // Load profiles from local storage on mount
   useEffect(() => {
     async function loadVoiceProfiles() {
       setIsLoading(true);
       try {
-        const user = auth.currentUser;
-        const userId = user ? user.uid : "default_branding_user";
-        
-        const colRef = collection(db, "users", userId, "voiceProfiles");
-        const snapshot = await getDocs(colRef).catch(() => null);
-
-        if (snapshot && !snapshot.empty) {
-          const loadedProfiles = { ...DEFAULT_PROFILES };
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as VoiceProfileConfig;
-            if (data && data.role) {
-              loadedProfiles[data.role] = {
-                role: data.role,
-                voiceName: data.voiceName || DEFAULT_PROFILES[data.role].voiceName,
-                pitch: typeof data.pitch === "number" ? data.pitch : DEFAULT_PROFILES[data.role].pitch,
-                speed: typeof data.speed === "number" ? data.speed : DEFAULT_PROFILES[data.role].speed,
-                warmth: typeof data.warmth === "number" ? data.warmth : DEFAULT_PROFILES[data.role].warmth,
-                updatedAt: data.updatedAt,
-              };
-            }
-          });
-          setProfiles(loadedProfiles);
-          setIsSavedInFirestore(true);
+        const saved = localStorage.getItem("sf_voice_profiles_config");
+        if (saved) {
+           setProfiles(JSON.parse(saved));
+           setIsSavedInFirestore(true);
         }
       } catch (err) {
         console.warn("Notice: Voice profiles loaded from local defaults:", err);
@@ -90,38 +71,17 @@ export function VoiceProfileManager() {
   const handleSaveToFirestore = async () => {
     setIsSaving(true);
     try {
-      const user = auth.currentUser;
-      const userId = user ? user.uid : "default_branding_user";
-      const now = new Date().toISOString();
-
-      for (const roleKey of ["Host", "Expert", "Analyst"] as const) {
-        const currentProf = profiles[roleKey];
-        const docRef = doc(db, "users", userId, "voiceProfiles", roleKey.toLowerCase());
-        
-        await safeSetDoc(
-          docRef,
-          {
-            role: currentProf.role,
-            voiceName: currentProf.voiceName,
-            pitch: currentProf.pitch,
-            speed: currentProf.speed,
-            warmth: currentProf.warmth,
-            updatedAt: now,
-          },
-          { merge: true }
-        );
-      }
-
+      localStorage.setItem("sf_voice_profiles_config", JSON.stringify(profiles));
       setIsSavedInFirestore(true);
       addToast(
         "Perfiles de Voz Guardados",
-        `Ajustes de timbre y marca para ${activeTab} y todo el elenco persistidos en Firestore.`,
+        `Ajustes de timbre y marca persistidos localmente.`,
         "success"
       );
     } catch (err: any) {
       addToast(
         "Error al Guardar",
-        `No se pudo guardar la configuración en Firestore: ${err?.message || "Falló la conexión"}`,
+        `No se pudo guardar la configuración: ${err?.message || "Falló la conexión"}`,
         "error"
       );
     } finally {
