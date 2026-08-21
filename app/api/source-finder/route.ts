@@ -175,7 +175,14 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       );
     }
 
-    const { topic: inputTopic, contentType = "General", customMinReputation, groundingMode = "speed" } = await req.json();
+    const {
+      topic: inputTopic,
+      contentType = "General",
+      customMinReputation,
+      minReputation: explicitMinReputation,
+      excludedKeywords: rawExcludedKeywords,
+      groundingMode = "speed"
+    } = await req.json();
 
     if (!inputTopic || typeof inputTopic !== "string") {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
@@ -184,6 +191,19 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
     // --- SANITIZACIÓN DE ENTRADA ---
     if (inputTopic.length > 200) {
         return NextResponse.json({ status: "error", message: "El tema de investigación es demasiado largo." }, { status: 400 });
+    }
+
+    // Process excluded keywords filter
+    let excludedKeywords: string[] = [];
+    if (Array.isArray(rawExcludedKeywords)) {
+      excludedKeywords = rawExcludedKeywords
+        .map((k) => (typeof k === "string" ? k.trim().toLowerCase() : ""))
+        .filter((k) => k.length > 0);
+    } else if (typeof rawExcludedKeywords === "string" && rawExcludedKeywords.trim().length > 0) {
+      excludedKeywords = rawExcludedKeywords
+        .split(",")
+        .map((k) => k.trim().toLowerCase())
+        .filter((k) => k.length > 0);
     }
 
     let topicToResearch = inputTopic.trim();
@@ -206,7 +226,11 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
     }
 
     const strategy = STRATEGIES[contentType] || STRATEGIES["General"];
-    const minReputation = typeof customMinReputation === "number" ? customMinReputation : strategy.default_min_reputation;
+    const minReputation = typeof explicitMinReputation === "number"
+      ? explicitMinReputation
+      : typeof customMinReputation === "number"
+        ? customMinReputation
+        : strategy.default_min_reputation;
 
     let reportText = "";
     let rawSources: SourceItem[] = [];
@@ -216,6 +240,18 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
       try {
         const ai = aiClient;
 
+        const exclusionNotice = excludedKeywords.length > 0
+          ? `
+FILTROS DE EXCLUSIÓN DE CONTENIDO ESTRICTO (Content Filtering):
+Las siguientes palabras clave, temáticas o sesgos están ESTRICTAMENTE EXCLUIDOS del análisis e informe:
+${excludedKeywords.map((k) => `- "${k}"`).join("\n")}
+
+REGLAS DE FILTRADO:
+1. Omite y no hagas referencia a ningún dato, rumor o perspectiva basada en estas palabras clave excluidas.
+2. Si una fuente se enfoca principalmente en estos temas excluidos, descártala completamente.
+3. Asegura un reporte limpio y centrado exclusivamente en hechos contrastados ajenos a dichos filtros.`
+          : "";
+
         const searchPrompt = `
 Eres un sub-agente experto en investigación y calificación de fuentes de información (SourceFinder Agent v2.0).
 ${groundingMode === 'depth' ? 'MODO PROFUNDIDAD: Realiza una investigación exhaustiva, detallada, contrastando múltiples perspectivas y fuentes de alta fiabilidad.' : 'MODO VELOCIDAD: Realiza una investigación rápida y concisa, enfocada en los datos más relevantes de inmediato.'}
@@ -223,6 +259,7 @@ ${signalAnalysis ? `MODO ANALISTA DE SEÑALES ACTIVADO: Tendencia detectada con 
 Investiga el tema: "${topicToResearch}".
 Categoría: ${contentType}.
 Modificador de búsqueda: ${strategy.query_modifier}.
+${exclusionNotice}
 
 INSTRUCCIONES DE FORMATO OBLIGATORIO:
 Genera un informe de inteligencia en Markdown estricto con las siguientes secciones:
@@ -259,17 +296,36 @@ Analiza críticamente la información y sé sumamente veraz. Evita sesgos y clic
 
         for (const chunk of chunks) {
           if (chunk.web?.uri) {
-            const domain = new URL(chunk.web.uri).hostname;
-            const repData = getDomainReputation(chunk.web.uri);
-            const isQual = repData.score >= minReputation;
+            const uri = chunk.web.uri;
+            const domain = new URL(uri).hostname;
+            const repData = getDomainReputation(uri);
+            const title = chunk.web.title || `Fuente (${domain})`;
+            
+            // Check for excluded keywords
+            const matchedExclusion = excludedKeywords.find((kw) =>
+              domain.toLowerCase().includes(kw) ||
+              title.toLowerCase().includes(kw) ||
+              uri.toLowerCase().includes(kw)
+            );
+
+            let isQual = repData.score >= minReputation;
+            let rejectionReason: string | undefined;
+
+            if (matchedExclusion) {
+              isQual = false;
+              rejectionReason = `Descartada por filtro: contiene la palabra clave excluida "${matchedExclusion}"`;
+            } else if (!isQual) {
+              rejectionReason = `Reputación (${(repData.score * 100).toFixed(0)}%) inferior al umbral mínimo (${(minReputation * 100).toFixed(0)}%)`;
+            }
+
             const item: SourceItem = {
               url: chunk.web.uri,
-              title: chunk.web.title || `Fuente (${domain})`,
+              title,
               snippet: `Información obtenida de ${domain} para ${topicToResearch}`,
               domain,
               source_reputation: repData.score,
               qualified: isQual,
-              rejection_reason: isQual ? undefined : `Reputación (${repData.score}) inferior al mínimo (${minReputation})`,
+              rejection_reason: rejectionReason,
             };
             rawSources.push(item);
             if (isQual) qualifiedSources.push(item);
@@ -301,26 +357,54 @@ ${topicToResearch} ha emergido como la tendencia principal tras el análisis mul
         { url: `https://www.theverge.com/tech/${encodeURIComponent(topicToResearch.toLowerCase().slice(0, 20))}`, title: `Análisis Especializado: ${topicToResearch}`, snippet: `Reporte técnico y análisis profundo sobre ${topicToResearch}.`, domain: "theverge.com", source_reputation: 0.92 },
         { url: `https://www.techcrunch.com/article/${encodeURIComponent(topicToResearch.toLowerCase().slice(0, 20))}`, title: `Cobertura Noticiosa: ${topicToResearch}`, snippet: `Novedades de la industria sobre ${topicToResearch}.`, domain: "techcrunch.com", source_reputation: 0.90 },
         { url: `https://www.wired.com/story/${encodeURIComponent(topicToResearch.toLowerCase().slice(0, 20))}`, title: `Análisis Tecnológico: ${topicToResearch}`, snippet: `Inundación de novedades e impacto social de ${topicToResearch}.`, domain: "wired.com", source_reputation: 0.88 },
-        { url: `https://www.blog-unverified-rumors.xyz/${encodeURIComponent(topicToResearch.toLowerCase().slice(0, 10))}`, title: `Rumor no confirmado`, snippet: `Información de blog sin verificar.`, domain: "blog-unverified-rumors.xyz", source_reputation: 0.20 },
+        { url: `https://www.blog-unverified-rumors.xyz/${encodeURIComponent(topicToResearch.toLowerCase().slice(0, 10))}`, title: `Rumor no confirmado: ${topicToResearch}`, snippet: `Información de blog sin verificar con posibles spoilers.`, domain: "blog-unverified-rumors.xyz", source_reputation: 0.20 },
       ];
 
       for (const s of defaultSources) {
-        const isQual = s.source_reputation >= minReputation;
+        const matchedExclusion = excludedKeywords.find((kw) =>
+          s.domain.toLowerCase().includes(kw) ||
+          s.title.toLowerCase().includes(kw) ||
+          s.url.toLowerCase().includes(kw) ||
+          s.snippet.toLowerCase().includes(kw)
+        );
+
+        let isQual = s.source_reputation >= minReputation;
+        let rejectionReason: string | undefined;
+
+        if (matchedExclusion) {
+          isQual = false;
+          rejectionReason = `Descartada por filtro: contiene la palabra clave excluida "${matchedExclusion}"`;
+        } else if (!isQual) {
+          rejectionReason = `Puntaje de confianza (${(s.source_reputation * 100).toFixed(0)}%) menor al umbral (${(minReputation * 100).toFixed(0)}%)`;
+        }
+
         const item: SourceItem = {
           ...s,
           qualified: isQual,
-          rejection_reason: isQual ? undefined : `Puntaje de confianza (${s.source_reputation}) menor al umbral (${minReputation})`,
+          rejection_reason: rejectionReason,
         };
         rawSources.push(item);
         if (isQual) qualifiedSources.push(item);
       }
     }
 
+    const filtersApplied = {
+      minReputation,
+      excludedKeywords,
+      totalSourcesEvaluated: rawSources.length,
+      qualifiedSourcesCount: qualifiedSources.length,
+      rejectedSourcesCount: rawSources.length - qualifiedSources.length,
+      rejectedByKeywordsCount: rawSources.filter((s) => s.rejection_reason?.includes("palabra clave")).length,
+      rejectedByReputationCount: rawSources.filter((s) => s.rejection_reason?.includes("umbral")).length,
+    };
+
     return NextResponse.json({
       originalTopic: inputTopic,
       topic: topicToResearch,
       contentType,
       minReputation,
+      excludedKeywords,
+      filtersApplied,
       signalAnalysis,
       report: reportText,
       qualifiedSources,

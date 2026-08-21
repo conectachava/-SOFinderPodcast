@@ -32,7 +32,7 @@ service cloud.firestore {
     
     function isValidUserProfile(data) {
       return data.keys().hasAll(['name', 'email', 'status'])
-        && data.keys().size() <= 8
+        && data.keys().size() <= 12
         && data.name is string && data.name.size() <= 100
         && data.email is string && data.email.size() <= 200
         && data.status in ['pending', 'approved', 'rejected']
@@ -40,6 +40,8 @@ service cloud.firestore {
         && ( !('customHostVoice' in data) || (data.customHostVoice is string && data.customHostVoice.size() <= 100) )
         && ( !('episodesCount' in data) || (data.episodesCount is number) )
         && ( !('autoArchive' in data) || (data.autoArchive is bool) )
+        && ( !('monthlyTokenUsage' in data) || (data.monthlyTokenUsage is number) )
+        && ( !('contentFilters' in data) || true )
         && ( !('updatedAt' in data) || true );
     }
 
@@ -105,7 +107,7 @@ service cloud.firestore {
                     && isValidUserProfile(incoming());
                     
       allow update: if isValidId(userId) && isValidUserProfile(incoming()) && (
-        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'autoArchive', 'updatedAt']) && incoming().status == existing().status) ||
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'autoArchive', 'contentFilters', 'monthlyTokenUsage', 'updatedAt']) && incoming().status == existing().status) ||
         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
       );
       allow delete: if isAdmin() || isOwner(userId);

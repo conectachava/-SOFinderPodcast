@@ -13,7 +13,14 @@
         "updatedAt": { "type": "string", "description": "Server timestamp" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
         "isAdmin": { "type": "boolean" },
-        "monthlyTokenUsage": { "type": "number", "description": "Tokens consumed in current month" }
+        "monthlyTokenUsage": { "type": "number", "description": "Tokens consumed in current month" },
+        "contentFilters": {
+          "type": "object",
+          "properties": {
+            "minReputation": { "type": "number" },
+            "excludedKeywords": { "type": "array", "items": { "type": "string" } }
+          }
+        }
       },
       "required": ["name", "email", "status"]
     },

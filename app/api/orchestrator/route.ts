@@ -16,7 +16,14 @@ export const dynamic = "force-dynamic";
 
 export const POST = withAiApiValidation(async function POST(req: NextRequest) {
   try {
-    const { topic, contentType = "General", showFormat = "Debate", durationMinutes = 3 } = await req.json();
+    const {
+      topic,
+      contentType = "General",
+      showFormat = "Debate",
+      durationMinutes = 3,
+      minReputation,
+      excludedKeywords,
+    } = await req.json();
 
     if (!topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
@@ -41,7 +48,12 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
     const sfRes = await fetch(`${baseUrl}/api/source-finder`, {
       method: "POST",
       headers: internalHeaders,
-      body: JSON.stringify({ topic, contentType }),
+      body: JSON.stringify({
+        topic,
+        contentType,
+        minReputation,
+        excludedKeywords,
+      }),
     });
 
     const sfText = await sfRes.text();

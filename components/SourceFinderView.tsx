@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Shield, Filter, RefreshCw, Copy, Check, ExternalLink, AlertTriangle, FileText, Sparkles, TrendingUp, BarChart3, Quote, Link2, BookmarkCheck, Layers, ListOrdered, Wand2, Plus, Trash2, Edit3, ArrowRight, BookOpen, Share2, Play, Save } from "lucide-react";
+import { Search, Shield, Filter, RefreshCw, Copy, Check, ExternalLink, AlertTriangle, FileText, Sparkles, TrendingUp, BarChart3, Quote, Link2, BookmarkCheck, Layers, ListOrdered, Wand2, Plus, Trash2, Edit3, ArrowRight, BookOpen, Share2, Play, Save, SlidersHorizontal, X, ShieldAlert, ShieldCheck, EyeOff, Tag } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SourceBadge } from "./SourceBadge";
@@ -18,16 +18,20 @@ import { safeSetDoc } from "@/lib/firebase";
 
 export function SourceFinderView({ onUseReportForScript }: { onUseReportForScript?: (report: string) => void }) {
   const { addToast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [mode, setMode] = useState<"direct" | "sequential">("direct");
   const [topic, setTopic] = useState("Revolución de la Inteligencia Artificial Generativa: Agentes Autónomos, AGI y el Futuro del Trabajo");
   const [contentType, setContentType] = useState("Noticia Tecnológica");
   const [minReputation, setMinReputation] = useState(0.7);
+  const [excludedKeywords, setExcludedKeywords] = useState<string[]>(["rumores", "clickbait"]);
+  const [keywordInput, setKeywordInput] = useState<string>("");
+  const [showFilterSettings, setShowFilterSettings] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [qualifiedSources, setQualifiedSources] = useState<any[]>([]);
   const [rawSources, setRawSources] = useState<any[]>([]);
+  const [filtersAppliedInfo, setFiltersAppliedInfo] = useState<any | null>(null);
   const [signalAnalysis, setSignalAnalysis] = useState<SignalAnalysisResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +40,36 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
   const [isCitingActive, setIsCitingActive] = useState<boolean>(false);
   const [activeCitationIndex, setActiveCitationIndex] = useState<number | null>(null);
   const [groundingMode, setGroundingMode] = useState<"speed" | "depth">("speed");
+
+  const presetExclusionSuggestions = [
+    "rumores",
+    "clickbait",
+    "spoilers",
+    "política partidista",
+    "fake news",
+    "especulaciones",
+    "contenido no verificado",
+    "farándula"
+  ];
+
+  const handleAddExcludedKeyword = (kwToAdd?: string) => {
+    const term = (kwToAdd || keywordInput).trim().toLowerCase();
+    if (!term) return;
+    if (!excludedKeywords.includes(term)) {
+      setExcludedKeywords([...excludedKeywords, term]);
+      addToast("Filtro Añadido", `Palabra clave excluida: "${term}"`, "info");
+    }
+    setKeywordInput("");
+  };
+
+  const handleRemoveExcludedKeyword = (kwToRemove: string) => {
+    setExcludedKeywords(excludedKeywords.filter((k) => k !== kwToRemove));
+  };
+
+  const handleClearExcludedKeywords = () => {
+    setExcludedKeywords([]);
+    addToast("Filtros Reiniciados", "Se han limpiado todas las palabras clave excluidas.", "info");
+  };
 
   // Sequential mode state
   const [subtopicCount, setSubtopicCount] = useState<number>(4);
@@ -112,6 +146,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
           topic: targetTopic,
           contentType,
           customMinReputation: minReputation,
+          excludedKeywords,
           groundingMode,
         }),
       });
@@ -124,6 +159,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
       setReport(data.report);
       setQualifiedSources(data.qualifiedSources || []);
       setRawSources(data.rawSources || []);
+      setFiltersAppliedInfo(data.filtersApplied || null);
       setSignalAnalysis(data.signalAnalysis || null);
 
       if (data.signalAnalysis) {
@@ -133,9 +169,10 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
           "success"
         );
       } else {
+        const rejectedCount = (data.rawSources?.length || 0) - (data.qualifiedSources?.length || 0);
         addToast(
-          "Informe Generado",
-          `Se calificaron ${data.qualifiedSources?.length || 0} fuentes con puntaje >${(minReputation * 100).toFixed(0)}%.`,
+          "Informe Generado con Filtros",
+          `${data.qualifiedSources?.length || 0} fuentes calificadas (${rejectedCount} descartadas por filtros).`,
           "success"
         );
       }
@@ -149,7 +186,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
     } finally {
       setLoading(false);
     }
-  }, [topic, contentType, minReputation, addToast, groundingMode]);
+  }, [topic, contentType, minReputation, excludedKeywords, addToast, groundingMode]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -529,25 +566,163 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
             </div>
           ) : (
             <>
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">
-                    Umbral Mínimo Reputación
-                  </label>
-                  <span className="font-mono font-bold text-slate-900">{(minReputation * 100).toFixed(0)}%</span>
+              {/* Content Filtering System Section */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span className="font-bold text-slate-900 dark:text-white text-xs">
+                      Filtros de Contenido
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 rounded-full text-[10px] font-mono font-bold">
+                    {excludedKeywords.length + (minReputation > 0.5 ? 1 : 0)} activos
+                  </span>
                 </div>
-                <input
-                  type="range"
-                  min="0.3"
-                  max="0.9"
-                  step="0.05"
-                  value={minReputation}
-                  onChange={(e) => setMinReputation(parseFloat(e.target.value))}
-                  className="w-full accent-slate-900 cursor-pointer"
-                />
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Fuentes con puntaje menor serán descartadas.
-                </p>
+
+                {/* Minimum Source Reputation Slider & Presets */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">
+                      Reputación Mínima de Fuente
+                    </label>
+                    <span className="font-mono font-extrabold text-indigo-600 dark:text-indigo-400 text-xs">
+                      {(minReputation * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.3"
+                    max="0.95"
+                    step="0.05"
+                    value={minReputation}
+                    onChange={(e) => setMinReputation(parseFloat(e.target.value))}
+                    className="w-full accent-indigo-600 cursor-pointer"
+                  />
+                  <div className="grid grid-cols-4 gap-1 pt-1">
+                    {[
+                      { label: "50% Flex", val: 0.5 },
+                      { label: "70% Std", val: 0.7 },
+                      { label: "85% Alta", val: 0.85 },
+                      { label: "95% Top", val: 0.95 },
+                    ].map((p) => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => setMinReputation(p.val)}
+                        className={`py-1 text-[10px] font-bold rounded transition-colors cursor-pointer border ${
+                          minReputation === p.val
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Excluded Keywords Blacklist */}
+                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700/80">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1">
+                      <EyeOff className="w-3 h-3 text-rose-500" />
+                      <span>Exclusión de Palabras Clave</span>
+                    </label>
+                    {excludedKeywords.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearExcludedKeywords}
+                        className="text-[10px] text-slate-400 hover:text-rose-600 transition-colors"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Input to add custom excluded keyword */}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Añadir término no deseado..."
+                      value={keywordInput}
+                      onChange={(e) => setKeywordInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddExcludedKeyword();
+                        }
+                      }}
+                      className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddExcludedKeyword()}
+                      disabled={!keywordInput.trim()}
+                      className="px-2.5 py-1.5 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-center"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Active Excluded Tags */}
+                  {excludedKeywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {excludedKeywords.map((kw) => (
+                        <span
+                          key={kw}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 rounded-md text-[11px] font-medium"
+                        >
+                          <span>{kw}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExcludedKeyword(kw)}
+                            className="hover:text-rose-900 dark:hover:text-rose-100 cursor-pointer"
+                            title={`Eliminar filtro "${kw}"`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                      Sin exclusiones activas. Se analizarán todas las fuentes relevantes.
+                    </p>
+                  )}
+
+                  {/* Quick Suggestion Chips */}
+                  <div className="pt-1.5">
+                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                      Filtros Rápidos Recomendados:
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {presetExclusionSuggestions.map((sug) => {
+                        const isSelected = excludedKeywords.includes(sug);
+                        return (
+                          <button
+                            key={sug}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                handleRemoveExcludedKeyword(sug);
+                              } else {
+                                handleAddExcludedKeyword(sug);
+                              }
+                            }}
+                            className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer border ${
+                              isSelected
+                                ? "bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700 font-bold"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200"
+                            }`}
+                          >
+                            {isSelected ? "✓" : "+"} {sug}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Live Monitoring Toggle */}
@@ -917,6 +1092,41 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
               </div>
             )}
 
+            {/* Active Content Filter Summary Bar */}
+            {(excludedKeywords.length > 0 || minReputation > 0.5) && (
+              <div className="px-6 py-2.5 bg-indigo-50/70 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 flex items-center gap-1">
+                    <SlidersHorizontal className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                    Filtros de Contenido Aplicados:
+                  </span>
+                  <span className="px-2 py-0.5 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded font-mono text-[10px] font-bold">
+                    Reputación Mínima: ≥{(minReputation * 100).toFixed(0)}%
+                  </span>
+                  {excludedKeywords.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Excluidos:</span>
+                      {excludedKeywords.map((kw) => (
+                        <span key={kw} className="px-1.5 py-0.2 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded text-[10px] font-medium border border-rose-200 dark:border-rose-900">
+                          🚫 {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-[10px] font-mono">
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                    {qualifiedSources.length} Calificadas
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-700">•</span>
+                  <span className="text-rose-600 dark:text-rose-400 font-bold">
+                    {rawSources.length - qualifiedSources.length} Descartadas por Filtros
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Clean Header matching Design HTML */}
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -1159,9 +1369,20 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
                             </td>
                             <td className="py-2 px-2 text-[11px] relative">
                               {s.qualified ? (
-                                <span className="text-emerald-700 font-medium">✓ Calificada</span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  <span>Calificada</span>
+                                </span>
+                              ) : s.rejection_reason?.includes("palabra clave") ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-[10px]" title={s.rejection_reason}>
+                                  <EyeOff className="w-3 h-3 text-rose-500" />
+                                  <span>Excluida por Filtro</span>
+                                </span>
                               ) : (
-                                <span className="text-rose-600 font-medium">{s.rejection_reason || "Rechazada"}</span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold text-[10px]" title={s.rejection_reason || "Baja reputación"}>
+                                  <ShieldAlert className="w-3 h-3 text-amber-500" />
+                                  <span>Baja Reputación</span>
+                                </span>
                               )}
 
                               {/* Confidence Score Hover Overlay */}
