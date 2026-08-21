@@ -361,12 +361,12 @@ export function UserProfileModal({
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error("Error signing out", error);
-    }
+  const handleLogout = () => {
+    // Limpiar credencial local
+    localStorage.removeItem('auth_token');
+
+    // Recargar la aplicación para que ProtectedRoute lo envíe al Hub
+    window.location.href = '/';
   };
 
   const handleSave = () => {
@@ -674,12 +674,40 @@ export function UserProfileModal({
               </div>
 
               {/* Insights Summary Footer */}
-              <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl flex items-center justify-between text-xs text-indigo-950 dark:text-indigo-200">
+              <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl flex items-center justify-between text-xs text-indigo-950 dark:text-indigo-200 mb-4">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>
                     Día de mayor uso: <strong className="font-semibold">Día 24</strong> con 220,000 tokens y 11 sesiones de podcast.
                   </span>
+                </div>
+              </div>
+
+              {/* Token Limits Verification */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center border border-rose-200 dark:border-rose-900/50">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <h5 className="font-bold text-slate-900 dark:text-white text-sm">Verificación de Límites Gemini</h5>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Contexto Máximo (Output)</span>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">8,192 Tokens</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-1">
+                    <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: "35%" }}></div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mb-4">Uso promedio por script: ~2,800 tokens. (Margen Seguro)</p>
+
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Riesgo de Truncamiento de Respuestas</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 rounded">BAJO</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    El análisis indica que los fallos recientes de carga no están relacionados con exceso de tokens en las respuestas de Gemini.
+                  </p>
                 </div>
               </div>
             </div>

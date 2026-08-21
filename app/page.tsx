@@ -21,7 +21,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HelpGuideDrawer } from "@/components/HelpGuideDrawer";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { InactivityModal } from "@/components/InactivityModal";
-import { LoginPage } from "@/components/LoginPage";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { SkeletonDashboardLoader } from "@/components/SkeletonDashboardLoader";
 import { AuthRequiredModal } from "@/components/AuthRequiredModal";
 import { SnapshotRestoreModal, ProjectSnapshot } from "@/components/SnapshotRestoreModal";
@@ -32,6 +32,7 @@ import { collection, onSnapshot, doc, getDoc, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase";
 import { useToast } from "@/components/Toast";
 import { useThemeConfig } from "@/hooks/useThemeConfig";
+import { useAppSyncGuard } from "@/hooks/useAppSyncGuard";
 
 function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "idle" }) {
   const { addToast } = useToast();
@@ -168,6 +169,20 @@ export default function Home() {
     return true;
   });
   const { addToast } = useToast();
+
+  useAppSyncGuard({
+    userUid: user?.uid,
+    activeTab,
+    reportText,
+    rawScript,
+    scriptLinesLength: scriptLines.length,
+    onRecoverState: (data) => {
+      if (data.reportText) setReportText(data.reportText);
+      if (data.rawScript) setRawScript(data.rawScript);
+      if (data.scriptLines) setScriptLines(data.scriptLines);
+    },
+    addToast
+  });
 
   useEffect(() => {
     const handleOnline = () => {
@@ -379,14 +394,8 @@ export default function Home() {
     );
   }
 
-  if (!user && !guestBypassed) {
-    return (
-      <LoginPage onBypassGuest={() => setGuestBypassed(true)} />
-    );
-  }
-
   return (
-    <>
+    <ProtectedRoute>
       <AutosaveNotifier syncStatus={syncStatus} />
       <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-400">
         {activeTab === "landing" ? (
@@ -654,6 +663,6 @@ export default function Home() {
           <p className="text-[10px] font-mono opacity-60">v0.1.0</p>
         </footer>
       </div>
-    </>
+    </ProtectedRoute>
   );
 }

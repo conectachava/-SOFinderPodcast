@@ -68,12 +68,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  const forceUnblockLoading = () => {
+  const forceUnblockLoading = React.useCallback(() => {
     setLoading(false);
     setReady(true);
-  };
+  }, []);
 
-  const retryAuth = () => {
+  const retryAuth = React.useCallback(() => {
     try {
       const currentUser = auth.currentUser;
       setUser(currentUser);
@@ -95,54 +95,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
       setReady(true);
     }
-  };
+  }, []);
 
-  const loginWithGoogle = async (): Promise<User | null> => {
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      let result;
-      try {
-        result = await signInWithPopup(auth, provider);
-      } catch (popupErr: any) {
-        if (
-          popupErr?.code === "auth/popup-blocked" ||
-          popupErr?.code === "auth/cancelled-popup-request"
-        ) {
-          await signInWithRedirect(auth, provider);
-          return null;
-        }
-        throw popupErr;
-      }
-      if (result?.user) {
-        setUser(result.user);
-        return result.user;
-      }
-      return null;
-    } catch (error) {
-      console.error("Google Auth error:", error);
-      throw error;
-    } finally {
-      setLoading(false);
-      setReady(true);
-    }
-  };
+  const loginWithGoogle = React.useCallback(async (): Promise<User | null> => {
+    const APP_ID = "1:438537482408:web:9d43a0f924ed8d4b04529d";
+    const HUB_URL = "https://gs.conectachava.com/";
+    const returnTo = encodeURIComponent(`${window.location.origin}/callback`);
+    window.location.href = `${HUB_URL}?appId=${APP_ID}&returnTo=${returnTo}`;
+    return null;
+  }, []);
 
-  const logout = async () => {
-    setLoading(true);
-    try {
-      await signOut(auth);
-      setUser(null);
-      setProfileState(null);
-      setIsAdmin(false);
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      setLoading(false);
-      setReady(true);
-    }
-  };
+  const logout = React.useCallback(async () => {
+    localStorage.removeItem('auth_token');
+    window.location.href = '/';
+  }, []);
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
@@ -255,7 +221,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const clearAuthCache = async () => {
+  const clearAuthCache = React.useCallback(async () => {
     setLoading(true);
     try {
       await clearFirestoreAuthCache();
@@ -268,9 +234,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
       setReady(true);
     }
-  };
+  }, []);
 
-  const setProfile = async (updates: Partial<UserProfileWithStatus>) => {
+  const setProfile = React.useCallback(async (updates: Partial<UserProfileWithStatus>) => {
     if (user && profile) {
       const userDocRef = doc(db, "users", user.uid);
       const safeUpdates = { ...updates };
@@ -280,10 +246,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       await setDoc(userDocRef, { ...safeUpdates, status: profile.status, updatedAt: serverTimestamp() }, { merge: true });
     }
-  };
+  }, [user, profile]);
+
+  const contextValue = React.useMemo(() => ({
+    user, loading, ready, authStatus, profile, isAdmin, setProfile, loginWithGoogle, logout, retryAuth, forceUnblockLoading, clearAuthCache
+  }), [user, loading, ready, authStatus, profile, isAdmin, setProfile, loginWithGoogle, logout, retryAuth, forceUnblockLoading, clearAuthCache]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, ready, authStatus, profile, isAdmin, setProfile, loginWithGoogle, logout, retryAuth, forceUnblockLoading, clearAuthCache }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

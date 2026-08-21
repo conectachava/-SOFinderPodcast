@@ -46,18 +46,22 @@ export function SystemStatusProvider({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  const setStatus = (newStatus: SystemState, message: string | null = null) => {
+  const setStatus = React.useCallback((newStatus: SystemState, message: string | null = null) => {
     setStatusState(newStatus);
     setStatusMessage(message);
-  };
+  }, []);
 
-  const clearStatus = () => {
+  const clearStatus = React.useCallback(() => {
     setStatusState("idle");
     setStatusMessage(null);
-  };
+  }, []);
+
+  const contextValue = React.useMemo(() => ({
+    status, statusMessage, setStatus, clearStatus
+  }), [status, statusMessage, setStatus, clearStatus]);
 
   return (
-    <SystemStatusContext.Provider value={{ status, statusMessage, setStatus, clearStatus }}>
+    <SystemStatusContext.Provider value={contextValue}>
       {children}
     </SystemStatusContext.Provider>
   );

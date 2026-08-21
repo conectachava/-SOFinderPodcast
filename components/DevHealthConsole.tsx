@@ -21,6 +21,8 @@ export function DevHealthConsole() {
   const [filterLevel, setFilterLevel] = useState<"all" | "error" | "warn" | "info" | "firebase">("all");
   const [firebasePing, setFirebasePing] = useState<number | null>(14);
   const [firebaseConnected, setFirebaseConnected] = useState<boolean>(true);
+  const [memoryUsage, setMemoryUsage] = useState<number | null>(null);
+  const [memoryWarning, setMemoryWarning] = useState<boolean>(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -87,14 +89,37 @@ export function DevHealthConsole() {
   // Firebase ping simulator
   useEffect(() => {
     if (!isOpen) return;
-    const interval = setInterval(() => {
+    
+    // Memory Usage Monitoring
+    const monitorMemory = () => {
+      const perf = window.performance as any;
+      if (perf && perf.memory) {
+        const used = Math.round(perf.memory.usedJSHeapSize / (1024 * 1024));
+        setMemoryUsage(used);
+        if (used > 1500) {
+          if (!memoryWarning) {
+            setMemoryWarning(true);
+            logger.warn("Pico de uso de memoria detectado (> 1.5 GB). Considere recargar para evitar ciclo.", { used: `${used} MB` }, "MemGuard");
+          }
+        } else {
+          setMemoryWarning(false);
+        }
+      }
+    };
+    
+    monitorMemory();
+    const memInterval = setInterval(monitorMemory, 2000);
+    const pingInterval = setInterval(() => {
       const ping = Math.floor(Math.random() * 15) + 8;
       setFirebasePing(ping);
       setFirebaseConnected(typeof navigator !== "undefined" ? navigator.onLine : true);
     }, 4000);
 
-    return () => clearInterval(interval);
-  }, [isOpen]);
+    return () => {
+      clearInterval(memInterval);
+      clearInterval(pingInterval);
+    };
+  }, [isOpen, memoryWarning]);
 
   useEffect(() => {
     if (autoScroll && logsEndRef.current && !isMinimized) {
@@ -229,6 +254,14 @@ export function DevHealthConsole() {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Memory Usage Live Status */}
+            {memoryUsage !== null && (
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 border rounded-md text-[10px] font-mono mr-1 ${memoryWarning ? "bg-rose-950 border-rose-800 text-rose-400" : "bg-slate-950 border-slate-800 text-slate-300"}`}>
+                <Cpu className={`w-3.5 h-3.5 ${memoryWarning ? "text-rose-400 animate-pulse" : "text-emerald-400"}`} />
+                <span>Mem:</span>
+                <span className={`font-bold ${memoryWarning ? "text-rose-400" : "text-emerald-400"}`}>{memoryUsage}MB</span>
+              </div>
+            )}
             {/* Firebase Live Status */}
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-md text-[10px] font-mono mr-1">
               <span className={`w-2 h-2 rounded-full ${firebaseConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-500"}`} />

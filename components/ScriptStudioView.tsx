@@ -14,6 +14,7 @@ import {
 import { useToast } from "./Toast";
 import { SentimentBadge } from "./SentimentBadge";
 import { ScriptSentimentPanel } from "./ScriptSentimentPanel";
+import { ToneReviewPanel } from "./ToneReviewPanel";
 
 // Color-Coded Emotion Pill Component representing selected line emotion for Narrative Arc visual checks
 export function EmotionPill({ emotion, sentiment }: { emotion?: string; sentiment?: string }) {
@@ -996,6 +997,27 @@ export function ScriptStudioView({
     setNewComment("");
     addToast("Nota Añadida", "Comentario guardado en la sesión colaborativa.", "success");
   };
+
+  const handleApplyToneSuggestion = (originalText: string, suggestedText: string) => {
+    if (!rawScript) return;
+    
+    // Attempt to replace in the raw script
+    const updatedRaw = rawScript.replace(originalText, suggestedText);
+    
+    // Also try to replace in the parsed lines to keep them in sync
+    const updatedLines = parsedLines.map(line => {
+      if (line.text.includes(originalText)) {
+        return { ...line, text: line.text.replace(originalText, suggestedText) };
+      }
+      return line;
+    });
+
+    setRawScript(updatedRaw);
+    setParsedLines(updatedLines);
+    pushHistory(updatedRaw, updatedLines);
+    addToast("Tono Ajustado", "Sugerencia aplicada al guion correctamente.", "success");
+  };
+
   const handleGenerateScript = async () => {
     if (!reportText.trim()) {
       addToast("Error de Validación", "Por favor ingresa un informe de inteligencia.", "error");
@@ -2224,6 +2246,15 @@ export function ScriptStudioView({
 
         {/* Script Sentiment & Emotional Impact Panel */}
         <ScriptSentimentPanel scriptLines={parsedLines} rawScript={rawScript} />
+
+        {/* Tone Review Panel */}
+        {rawScript && (
+          <ToneReviewPanel 
+            scriptText={rawScript} 
+            format={showFormat} 
+            onApplySuggestion={handleApplyToneSuggestion} 
+          />
+        )}
 
         {/* Collaborative Notes & Comments Widget */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-2xs space-y-4 transition-colors">
