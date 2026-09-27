@@ -105,4 +105,4 @@ Este documento detalla la lógica de flujo de datos, la canalización multiagent
     Notificador UI de Sincronización ("Guardado")
 ```
 
-  El callback actual guarda un token del Hub en `localStorage`, pero este repositorio no define ni verifica su emisor. Por tanto, ese flujo no constituye autenticación server-side. El middleware AI filtra algunos `User-Agent`, pero eso no protege las rutas contra llamadas directas. La verificación de identidad y autorización por ruta es un requisito pendiente antes de producción; véase [SECURITY.md](../SECURITY.md).
+  En el estado actual, el proveedor no establece usuario autenticado: el token del Hub se guarda, pero no se verifica y no habilita la rama de Firestore. El autosave y el historial en nube no están disponibles mediante ese flujo. El middleware AI filtra algunos `User-Agent`, pero no autentica solicitudes directas. La verificación de identidad y autorización por ruta sigue pendiente; véase [SECURITY.md](../SECURITY.md).

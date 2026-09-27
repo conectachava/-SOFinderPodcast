@@ -1,5 +1,6 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useState } from "react";
+import { useRouter } from "next/navigation";
 import { UserProfile } from "../components/UserProfileModal";
 
 export type AuthStatus = "checking" | "authenticated" | "unauthenticated";
@@ -46,17 +47,11 @@ const AuthContext = createContext<AuthContextType>({
   clearAuthCache: async () => { },
 });
 
-const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | "isLoggedIn"> = {
-  preferredFormat: "Análisis",
-  customHostVoice: "Paul",
-  episodesCount: 0,
-  autoArchive: false,
-};
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const router = useRouter();
   const [user, setUser] = useState<HubUser | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [ready, setReady] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [ready, setReady] = useState<boolean>(true);
 
   const authStatus: AuthStatus = (!ready || loading) ? "checking" : (user ? "authenticated" : "unauthenticated");
 
@@ -69,25 +64,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const retryAuth = React.useCallback(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-    if (token) {
-      // Create a mock user from token for now
-      const mockUser = { uid: token.substring(0, 20), email: "usuario@vsnrylabs.com", displayName: "Usuario", isAnonymous: false };
-      setUser(mockUser);
-      setProfileState({
-        ...defaultProfile,
-        name: "Usuario",
-        email: "usuario@vsnrylabs.com",
-        isLoggedIn: true,
-        status: "pending",
-        uid: mockUser.uid,
-      });
-      setIsAdmin(false);
-    } else {
-      setUser(null);
-      setProfileState(null);
-      setIsAdmin(false);
-    }
+    setUser(null);
+    setProfileState(null);
+    setIsAdmin(false);
     setLoading(false);
     setReady(true);
   }, []);
@@ -96,18 +75,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const APP_ID = "1:438537482408:web:9d43a0f924ed8d4b04529d";
     const HUB_URL = "https://gs.conectachava.com/";
     const returnTo = encodeURIComponent(`${window.location.origin}/callback`);
-    window.location.href = `${HUB_URL}?appId=${APP_ID}&returnTo=${returnTo}`;
+    window.location.assign(`${HUB_URL}?appId=${APP_ID}&returnTo=${returnTo}`);
     return null;
   }, []);
 
   const logout = React.useCallback(async () => {
     localStorage.removeItem('auth_token');
-    window.location.href = '/';
-  }, []);
-
-  useEffect(() => {
-    retryAuth();
-  }, [retryAuth]);
+    router.replace('/');
+  }, [router]);
 
   const clearAuthCache = React.useCallback(async () => {
     setLoading(true);

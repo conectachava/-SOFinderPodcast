@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal, Cpu } from "lucide-react";
+import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
+import { useRouter } from "next/navigation";
 import { useAuth, UserProfileWithStatus } from "../app/AuthProvider";
+import { clearFirestoreAuthCache, db } from "../lib/firebase";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { GeminiDiagnosticView } from "./GeminiDiagnosticView";
 
@@ -52,7 +55,8 @@ export function UserProfileModal({
   onToggleThemeSchedule,
   initialTab,
 }: UserProfileModalProps) {
-  const { user, profile: authProfile, isAdmin, setProfile } = useAuth();
+  const router = useRouter();
+  const { user, profile: authProfile, isAdmin, setProfile, loginWithGoogle } = useAuth();
   const [localProfile, setLocalProfile] = useState<UserProfileWithStatus | null>(authProfile);
   const [activeTab, setActiveTab] = useState<"profile" | "analytics" | "voice" | "tokens" | "diagnostic" | "admin">(
     initialTab || "profile"
@@ -83,7 +87,7 @@ export function UserProfileModal({
     setPreferredAiModel(modelId);
     try {
       localStorage.setItem("sf_preferred_gemini_model", modelId);
-    } catch {}
+    } catch { }
   };
 
   // Development Health Check Console state
@@ -101,7 +105,7 @@ export function UserProfileModal({
     try {
       localStorage.setItem("sf_dev_health_console", val ? "true" : "false");
       window.dispatchEvent(new CustomEvent("sf_dev_console_toggle", { detail: { active: val } }));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   // Voice Identity state
@@ -109,7 +113,7 @@ export function UserProfileModal({
     try {
       const saved = localStorage.getItem("sf_voice_profiles");
       if (saved) return JSON.parse(saved);
-    } catch (e) {}
+    } catch (e) { }
     return [
       { id: "1", speakerName: "Paul (Moderador)", role: "Moderador Principal", accent: "British Male", pitch: "Grave / Cálido", sampleDuration: "12s" },
       { id: "2", speakerName: "Sarah (Analista)", role: "Analista Co-Host", accent: "American Female", pitch: "Medio / Dinámico", sampleDuration: "9s" },
@@ -222,7 +226,7 @@ export function UserProfileModal({
                 });
                 localStorage.setItem("sf_topic_history", JSON.stringify(filtered));
               }
-            } catch (e) {}
+            } catch (e) { }
           }
 
           const draftKeys = Object.keys(localStorage).filter(k => k.startsWith("sf_draft_") || k.startsWith("sf_script_"));
@@ -237,7 +241,7 @@ export function UserProfileModal({
                   removedCount++;
                 }
               }
-            } catch (e) {}
+            } catch (e) { }
           });
         }
 
@@ -257,7 +261,7 @@ export function UserProfileModal({
   useEffect(() => {
     try {
       localStorage.setItem("sf_voice_profiles", JSON.stringify(voiceProfiles));
-    } catch (e) {}
+    } catch (e) { }
   }, [voiceProfiles]);
 
   // 30-Day Usage Analytics Dataset
@@ -297,7 +301,7 @@ export function UserProfileModal({
   );
   const avgTokensPerSession = Math.round(totalTokens30d / (totalSessions30d || 1));
 
-  
+
   const loadPendingUsers = async () => {
     setLoadingUsers(true);
     try {
@@ -315,7 +319,7 @@ export function UserProfileModal({
     }
     setLoadingUsers(false);
   };
-  
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalProfile(authProfile);
@@ -348,7 +352,6 @@ export function UserProfileModal({
 
   if (!isOpen) return null;
 
-  const { loginWithGoogle } = useAuth();
   const handleLoginRegister = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
@@ -363,7 +366,7 @@ export function UserProfileModal({
     localStorage.removeItem('auth_token');
 
     // Recargar la aplicación para que ProtectedRoute lo envíe al Hub
-    window.location.href = '/';
+    router.replace('/');
   };
 
   const handleSave = () => {
@@ -735,11 +738,10 @@ export function UserProfileModal({
                         <button
                           type="button"
                           onClick={() => handlePlayVoicePreview(vp)}
-                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
-                            playingVoiceId === vp.id
-                              ? "bg-amber-500 text-slate-950 animate-pulse ring-2 ring-amber-400"
-                              : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                          }`}
+                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${playingVoiceId === vp.id
+                            ? "bg-amber-500 text-slate-950 animate-pulse ring-2 ring-amber-400"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                            }`}
                           title="Reproducir muestra de audio en el sistema"
                         >
                           {playingVoiceId === vp.id ? (
@@ -881,11 +883,10 @@ export function UserProfileModal({
                     <button
                       type="button"
                       onClick={isRecording ? stopRecording : startRecording}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors shrink-0 ${
-                        isRecording
-                          ? "bg-rose-600 text-white animate-pulse"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
-                      }`}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors shrink-0 ${isRecording
+                        ? "bg-rose-600 text-white animate-pulse"
+                        : "bg-slate-900 text-white hover:bg-slate-800"
+                        }`}
                     >
                       <Mic className="w-3.5 h-3.5" />
                       {isRecording ? "Detener" : "Grabar Mic"}
@@ -920,7 +921,7 @@ export function UserProfileModal({
                     {userPlan} Podcaster
                   </span>
                 </div>
-                
+
                 <div className="space-y-1">
                   <div className="text-xs text-slate-400">Balance de Tokens Disponibles</div>
                   <div className="text-3xl font-black text-white font-mono flex items-baseline gap-2">
@@ -943,9 +944,8 @@ export function UserProfileModal({
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => { setUserPlan("Free"); setTokenBalance(500); }}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      userPlan === "Free" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
-                    }`}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${userPlan === "Free" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
+                      }`}
                   >
                     <div className="text-[10px] font-mono uppercase">Free</div>
                     <div className="font-bold text-xs">$0 / mes</div>
@@ -954,9 +954,8 @@ export function UserProfileModal({
 
                   <button
                     onClick={() => { setUserPlan("Pro"); setTokenBalance(5000); }}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      userPlan === "Pro" ? "border-indigo-600 bg-indigo-900 text-white" : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
-                    }`}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${userPlan === "Pro" ? "border-indigo-600 bg-indigo-900 text-white" : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
+                      }`}
                   >
                     <div className="text-[10px] font-mono text-amber-400 font-bold uppercase">Pro Podcaster</div>
                     <div className="font-bold text-xs">$29 / mes</div>
@@ -965,9 +964,8 @@ export function UserProfileModal({
 
                   <button
                     onClick={() => { setUserPlan("Studio"); setTokenBalance(20000); }}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      userPlan === "Studio" ? "border-emerald-600 bg-emerald-950 text-white" : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
-                    }`}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${userPlan === "Studio" ? "border-emerald-600 bg-emerald-950 text-white" : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
+                      }`}
                   >
                     <div className="text-[10px] font-mono text-emerald-400 font-bold uppercase">Studio</div>
                     <div className="font-bold text-xs">$79 / mes</div>
@@ -1060,7 +1058,7 @@ export function UserProfileModal({
                   </div>
 
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Preferencias de Estudio</h4>
-                  
+
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
@@ -1351,4 +1349,4 @@ export function UserProfileModal({
     </div>
   );
 }
- 
+

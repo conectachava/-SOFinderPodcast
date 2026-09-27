@@ -69,13 +69,15 @@ La aplicación se organiza en una arquitectura modular de pestañas e instrument
 
 ## 5. Módulos Adicionales y Herramientas
 
-- **Autoguardado en Firestore:** Sincronización automática cada 3 segundos de los borradores y líneas de guion cuando el usuario inicia sesión.
+- **Autoguardado en Firestore:** Hay lógica de sincronización cada 3 segundos, pero el flujo de acceso Hub actual no establece una identidad Firebase verificada; por ello el autosave en nube no está disponible para esas sesiones.
 - **Modo Temático Flexible:** Soporta tema claro, oscuro, sincronización con preferencia del sistema y programación por horario.
 - **Exportación de Proyecto:** Descarga de informes, guiones y storyboards en formato JSON, Markdown y TXT.
 - **Historial Reciente:** Cajón de proyectos anteriores guardados en Firestore para recargar sesiones previas.
 - **Atajos de Teclado:**
   - `Ctrl + S` / `Cmd + S`: Sincronización manual en Cloud.
   - `Ctrl + Enter` / `Cmd + Enter`: Avanzar a la siguiente fase del pipeline.
+
+El callback conserva el token recibido del Hub, pero no lo valida. Las funciones que necesitan un usuario autenticado de Firebase, como el historial y la sincronización en Firestore, no deben considerarse operativas para ese flujo hasta integrar verificación server-side.
 
 ---
 

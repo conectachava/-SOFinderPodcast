@@ -1,27 +1,31 @@
 import { describe, it, expect, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
 // Mock de las funciones y módulos externos
-const mockWithAiApiValidation = (handler: any) => async (req: any) => handler(req, {});
-const mockOrchestratorResponseSchema = z.object({
-  topic: z.string(),
-  contentType: z.string(),
-  showFormat: z.string(),
-  durationMinutes: z.number(),
-  intelligenceReport: z.string(),
-  scriptText: z.string(),
-  scriptLines: z.array(z.any()),
-  wordCount: z.number(),
-});
+const { mockWithAiApiValidation } = vi.hoisted(() => ({
+  mockWithAiApiValidation: (handler: (request: any, validation: any) => Promise<any>) =>
+    async (request: any) => handler(request, {}),
+}));
 
 vi.mock("@/lib/middleware", () => ({
   withAiApiValidation: mockWithAiApiValidation,
 }));
 
-vi.mock("@/lib/schemas", () => ({
-  OrchestratorResponseSchema: mockOrchestratorResponseSchema,
-}));
+vi.mock("@/lib/schemas", async () => {
+  const { z } = await import("zod");
+  return {
+    OrchestratorResponseSchema: z.object({
+      topic: z.string(),
+      contentType: z.string(),
+      showFormat: z.string(),
+      durationMinutes: z.number(),
+      intelligenceReport: z.string(),
+      scriptText: z.string(),
+      scriptLines: z.array(z.any()),
+      wordCount: z.number(),
+    }),
+  };
+});
 
 // Importar la función a probar después de los mocks
 import { POST } from "../app/api/orchestrator/route";
@@ -54,7 +58,7 @@ describe("Orchestrator API", () => {
       }
       if (url.includes("/api/script-writer")) {
         return NextResponse.json({
-          rawScript: "Paul: Hello\nSarah: Hi",
+          rawScript: "Paul: Hello, welcome to the latest episode of our podcast. Sarah: Hi everyone!",
           lines: [{ id: "1", speaker: "Paul", text: "Hello", timestamp: "0:00" }],
           wordCount: 2,
           estimatedDuration: "0.1 mins",
@@ -128,7 +132,7 @@ describe("Orchestrator API", () => {
     vi.spyOn(global, "fetch").mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url !== 'string') throw new Error("URL must be a string");
       if (url.includes("/api/source-finder")) {
-        return NextResponse.json({ report: "valid report" });
+        return NextResponse.json({ report: "A sufficiently detailed test research report for the script writer stage." });
       }
       if (url.includes("/api/script-writer")) {
         return NextResponse.json({ error: "SW Error" }, { status: 500 });
@@ -166,7 +170,7 @@ describe("Orchestrator API", () => {
       }
       if (url.includes("/api/script-writer")) {
         return NextResponse.json({
-          rawScript: "Paul: Hello\nSarah: Hi",
+          rawScript: "Paul: Hello, welcome to the latest episode of our podcast. Sarah: Hi everyone!",
           lines: [{ id: "1", speaker: "Paul", text: "Hello", timestamp: "0:00" }],
           wordCount: 2,
         });

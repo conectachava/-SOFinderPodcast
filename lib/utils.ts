@@ -15,18 +15,6 @@ export async function safeFetchJson<T = any>(
       headers.set("x-aistudio-client", "sourcefinder-app");
     }
 
-    try {
-      const { auth } = await import("./firebase");
-      if (auth?.currentUser && !headers.has("Authorization")) {
-        const token = await auth.currentUser.getIdToken().catch(() => null);
-        if (token) {
-          headers.set("Authorization", `Bearer ${token}`);
-        }
-      }
-    } catch {
-      // Ignore auth token retrieval errors
-    }
-
     const modifiedInit: RequestInit = {
       ...init,
       headers,
