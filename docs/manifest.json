@@ -9,9 +9,9 @@
   "license": "Private / Proprietary",
   "architecture": "Next.js App Router Full-Stack Application",
   "keyDependencies": {
-    "framework": "Next.js 16.2.12 (App Router)",
+    "framework": "Next.js ^16.3.6, lockfile 16.3.6 (App Router)",
     "aiSDK": "@google/genai ^2.4.0",
-    "databaseAndAuth": "Firebase 12.16.0 / Firebase Admin 14.2.0",
+    "databaseAndAuth": "Firebase Firestore ^12.16.0 / Firebase Admin ^14.2.0; Hub token server verification pending",
     "uiComponents": "React 19.2.8, Lucide React 0.553.0, Motion 12.23.24",
     "styling": "Tailwind CSS 4.1.11 with PostCSS"
   },

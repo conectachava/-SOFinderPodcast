@@ -38,12 +38,12 @@ const AuthContext = createContext<AuthContextType>({
   authStatus: "checking",
   profile: null,
   isAdmin: false,
-  setProfile: async () => {},
+  setProfile: async () => { },
   loginWithGoogle: async () => null,
-  logout: async () => {},
-  retryAuth: () => {},
-  forceUnblockLoading: () => {},
-  clearAuthCache: async () => {},
+  logout: async () => { },
+  retryAuth: () => { },
+  forceUnblockLoading: () => { },
+  clearAuthCache: async () => { },
 });
 
 const defaultProfile: Omit<UserProfileWithStatus, "name" | "email" | "status" | "isLoggedIn"> = {
@@ -57,9 +57,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<HubUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [ready, setReady] = useState<boolean>(false);
-  
+
   const authStatus: AuthStatus = (!ready || loading) ? "checking" : (user ? "authenticated" : "unauthenticated");
-  
+
   const [profile, setProfileState] = useState<UserProfileWithStatus | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
@@ -79,10 +79,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         name: "Usuario",
         email: "usuario@vsnrylabs.com",
         isLoggedIn: true,
-        status: "approved",
+        status: "pending",
         uid: mockUser.uid,
       });
-      setIsAdmin(true); // default to true for testing
+      setIsAdmin(false);
     } else {
       setUser(null);
       setProfileState(null);
@@ -121,7 +121,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const setProfile = React.useCallback(async (updates: Partial<UserProfileWithStatus>) => {
     if (user && profile) {
-      setProfileState(prev => prev ? { ...prev, ...updates } : null);
+      const safeUpdates = { ...updates };
+      delete safeUpdates.status;
+      delete safeUpdates.uid;
+      delete safeUpdates.isLoggedIn;
+      setProfileState(prev => prev ? { ...prev, ...safeUpdates } : null);
     }
   }, [user, profile]);
 

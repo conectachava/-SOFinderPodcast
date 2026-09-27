@@ -97,10 +97,12 @@ Este documento detalla la lógica de flujo de datos, la canalización multiagent
           Debounce de 3 Segundos
                     │
                     ▼
-     ¿Usuario Autenticado en Firebase?
-         ├── SÍ ──> setDoc(doc(db, "users", uid, "drafts", "currentSession"))
-         └── NO ──> Almacenamiento en Estado React Local
+     ¿Existe identidad verificada por Firebase?
+       ├── SÍ ──> Firestore aplica sus reglas por UID
+       └── NO ──> Estado local; no se debe autorizar escritura en la nube
                     │
                     ▼
     Notificador UI de Sincronización ("Guardado")
 ```
+
+  El callback actual guarda un token del Hub en `localStorage`, pero este repositorio no define ni verifica su emisor. Por tanto, ese flujo no constituye autenticación server-side. El middleware AI filtra algunos `User-Agent`, pero eso no protege las rutas contra llamadas directas. La verificación de identidad y autorización por ruta es un requisito pendiente antes de producción; véase [SECURITY.md](../SECURITY.md).

@@ -112,7 +112,7 @@ export function OrchestratorView({
     setLastCheckpoint(cp);
     try {
       localStorage.setItem("sf_pipeline_checkpoint", JSON.stringify(cp));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleRestoreCheckpoint = () => {
@@ -155,6 +155,12 @@ export function OrchestratorView({
   const [newBatchTopic, setNewBatchTopic] = useState("");
   const [batchQueueStatus, setBatchQueueStatus] = useState<Record<string, "pending" | "processing" | "completed" | "error">>({});
   const [batchProcessing, setBatchProcessing] = useState(false);
+  const isApproved = isAdmin || profile?.status === "approved";
+  const authMessage = !user
+    ? "Inicia sesión para solicitar acceso."
+    : profile?.status === "rejected"
+      ? "Tu cuenta no tiene acceso aprobado."
+      : "Tu cuenta está pendiente de aprobación.";
 
   const handleAddBatchTopic = () => {
     if (!newBatchTopic.trim()) return;
@@ -164,6 +170,10 @@ export function OrchestratorView({
   };
 
   const handleRunBatchQueue = async () => {
+    if (!isApproved) {
+      addToast("Acceso Denegado", authMessage, "error");
+      return;
+    }
     if (batchTopics.length === 0) {
       addToast("Cola Vacía", "Agrega al menos un tema a la cola.", "error");
       return;
@@ -197,14 +207,11 @@ export function OrchestratorView({
     addToast("Cola de Lotes Finalizada", "Todos los temas de la cola han sido generados en segundo plano.", "success");
   };
 
-  const isApproved = true;
-  const authMessage = null;
-
   const handleScrollToOrchestrator = () => {
     orchestratorRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-    const handleRunPipeline = async () => {
+  const handleRunPipeline = async () => {
     if (!isApproved) {
       addToast("Acceso Denegado", authMessage || "No tienes permisos.", "error");
       return;
@@ -483,11 +490,10 @@ export function OrchestratorView({
                   key={st}
                   type="button"
                   onClick={() => (isSelected ? handleRemoveTag(st) : handleAddTag(st))}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                    isSelected
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${isSelected
                       ? "bg-indigo-600 text-white font-bold"
                       : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
+                    }`}
                 >
                   {isSelected ? `✓ #${st}` : `+#${st}`}
                 </button>
@@ -506,9 +512,8 @@ export function OrchestratorView({
         <button
           onClick={handleRunPipeline}
           disabled={loading || !topic.trim() || !isApproved}
-          className={`w-full py-3 px-6 text-white font-bold rounded-lg text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-sm transition-all ${
-            loading || !isApproved ? "bg-slate-400 cursor-not-allowed" : "bg-slate-900 hover:bg-slate-800"
-          }`}
+          className={`w-full py-3 px-6 text-white font-bold rounded-lg text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-sm transition-all ${loading || !isApproved ? "bg-slate-400 cursor-not-allowed" : "bg-slate-900 hover:bg-slate-800"
+            }`}
         >
           {loading ? (
             <>
@@ -529,30 +534,26 @@ export function OrchestratorView({
             <h4 className="font-bold text-slate-800">Progreso de Orquestación en Vivo</h4>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-center">
               <div
-                className={`p-2 rounded border ${
-                  currentStep >= 1 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
-                }`}
+                className={`p-2 rounded border ${currentStep >= 1 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
+                  }`}
               >
                 1. SourceFinder
               </div>
               <div
-                className={`p-2 rounded border ${
-                  currentStep >= 2 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
-                }`}
+                className={`p-2 rounded border ${currentStep >= 2 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
+                  }`}
               >
                 2. Filtro Reputación
               </div>
               <div
-                className={`p-2 rounded border ${
-                  currentStep >= 3 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
-                }`}
+                className={`p-2 rounded border ${currentStep >= 3 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
+                  }`}
               >
                 3. Guionista v2.0
               </div>
               <div
-                className={`p-2 rounded border ${
-                  currentStep >= 4 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
-                }`}
+                className={`p-2 rounded border ${currentStep >= 4 ? "bg-slate-900 text-white font-bold border-slate-900" : "bg-white text-slate-400"
+                  }`}
               >
                 4. Audio Studio Deck
               </div>

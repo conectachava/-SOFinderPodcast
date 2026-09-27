@@ -8,9 +8,9 @@
 ## 2. Requisitos y Configuración de Entorno
 
 ### Requisitos Previos
-- Node.js versión 18+ o superior.
+- Node.js 24.x y npm 11.x (versiones declaradas en `package.json`).
 - Clave de API de Gemini (`GEMINI_API_KEY`).
-- Proyecto de Firebase provisionado para Firestore y Autenticación.
+- Proyecto de Firebase provisionado para Firestore.
 
 ### Variables de Entorno (`.env.example`)
 Asegúrate de contar con el archivo `.env` configurado en la raíz del proyecto:
@@ -26,8 +26,8 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=[TU_PROYECTO_ID]
 ## 3. Comandos de Ejecución y Despliegue
 
 ```bash
-# Instalación de dependencias
-npm install
+# Instalación reproducible
+npm ci
 
 # Modo de Desarrollo
 npm run dev
@@ -35,12 +35,19 @@ npm run dev
 # Verificación de Código y Linter
 npm run lint
 
+# Verificación de tipos
+npm run typecheck
+
 # Compilación para Producción
 npm run build
 
 # Iniciar Servidor de Producción
 npm run start
 ```
+
+`npm run build` prepara y valida `.next/standalone/server.js`; `npm run start` ejecuta ese artefacto. El servidor escucha en `PORT` cuando el entorno lo define y, de lo contrario, en el puerto 3000.
+
+La auditoría de dependencias se ejecuta con `npm audit --audit-level=high`. No uses `npm audit fix --force` sin revisar cambios de versión mayor y pruebas de regresión. Las credenciales van en variables de entorno; no se agregan al repositorio.
 
 ---
 
@@ -78,3 +85,10 @@ La aplicación se organiza en una arquitectura modular de pestañas e instrument
    - Asegúrate de definir `GEMINI_API_KEY` en tu entorno o panel de configuración. En ausencia de la clave, el sistema activará automáticamente los motores de reserva offline (*fallbacks*).
 2. **Desconexión con Firestore:**
    - La aplicación detecta automáticamente la pérdida de conectividad a Internet y conmuta a la memoria caché local sin perder el progreso del usuario. Se enviará un aviso emergente (*Toast*) cuando se restablezca la conexión.
+
+## 7. Estado de seguridad conocido
+
+- El token de callback del Hub se guarda en `localStorage`. El repositorio aún no documenta el emisor ni un verificador server-side compatible para ese token. No debe considerarse autenticación verificada ni usarse para decisiones de autorización.
+- Las rutas API deben validar autenticación y autorización en el servidor antes de exponerse en producción. El filtro de `User-Agent` no autentica solicitudes.
+- Las reglas de Firestore son una frontera independiente; una autorización visual en React no sustituye las reglas ni la verificación de identidad.
+- Consulta [SECURITY.md](../SECURITY.md) para riesgos conocidos y proceso de reporte.

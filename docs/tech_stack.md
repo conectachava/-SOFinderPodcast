@@ -2,7 +2,7 @@
 
 ## 1. Arquitectura Frontend y UI
 
-- **Framework Principal:** Next.js 16.2.12 con la arquitectura App Router (`/app`).
+- **Framework Principal:** Next.js `^16.3.6` (versión resuelta en el lockfile: 16.3.6) con la arquitectura App Router (`/app`).
 - **Biblioteca de Vista:** React 19.2.8.
 - **Lenguaje:** TypeScript 5.9.3 con tipado estricto habilitado (`tsconfig.json`).
 - **Estilos y Utility Framework:** Tailwind CSS 4.1.11 en combinación con `@tailwindcss/postcss` y `tw-animate-css`.
@@ -27,7 +27,7 @@
 
 - **Runtime de Servidor:** Node.js habilitado para ESM / Next.js Serverless API Routes (`app/api/*`).
 - **Base de Datos Persistente:** Firebase Firestore 12.16.0 (colección de borradores `drafts` e historial de podcasts `history`).
-- **Autenticación:** Firebase Authentication (con soporte de inicio de sesión anónimo, correo/clave y paso para usuarios invitados).
+- **Autenticación:** El cliente recibe un token desde un Hub externo y lo conserva en `localStorage`. El emisor/verificador no está definido en este repositorio; el token no es una identidad confiable hasta validarlo en servidor.
 - **Servicio Servidor Admin:** `firebase-admin` 14.2.0 para operaciones con privilegios elevados en el servidor.
 
 ---
@@ -35,4 +35,6 @@
 ## 4. Herramientas de Compilación y Calidad de Código
 
 - **Linter & Calidad:** ESLint 9.39.1 con configuración Next.js (`eslint-config-next`) y plugin de reglas de seguridad de Firebase (`@firebase/eslint-plugin-security-rules`).
-- **Control de Servidor:** `server.js` personalizado con soporte para Cloud Run y proxy reverso en puerto 3000.
+- **Salida de producción:** Next.js standalone (`output: "standalone"`); `npm run build` prepara y valida `.next/standalone/server.js`, y `npm run start` lo ejecuta. El puerto se toma de `PORT` o usa 3000.
+- **Runtime soportado:** Node.js 24.x y npm 11.x, declarados en `package.json`.
+- **Calidad:** `npm run lint`, `npm run typecheck`, `npm test` y `npm run build`; GitHub Actions ejecuta estos gates en Node 24.

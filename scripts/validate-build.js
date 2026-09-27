@@ -14,6 +14,7 @@ function validateBuild() {
   const buildIdPath = path.join(nextDir, 'BUILD_ID');
   const serverDir = path.join(nextDir, 'server');
   const staticDir = path.join(nextDir, 'static');
+  const standaloneServerPath = path.join(nextDir, 'standalone', 'server.js');
 
   // 1. Validate Next.js Build Output Artifacts
   if (!fs.existsSync(nextDir)) {
@@ -26,8 +27,8 @@ function validateBuild() {
     process.exit(1);
   }
 
-  if (!fs.existsSync(serverDir) || !fs.existsSync(staticDir)) {
-    console.error('❌ [Post-Build Validation Error] Critical server or static directories are missing in .next!');
+  if (!fs.existsSync(serverDir) || !fs.existsSync(staticDir) || !fs.existsSync(standaloneServerPath)) {
+    console.error('❌ [Post-Build Validation Error] Critical Next.js server, standalone entry point, or static directory is missing!');
     process.exit(1);
   }
 

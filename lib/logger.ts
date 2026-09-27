@@ -23,7 +23,7 @@ function sanitizeSensitiveData(data: any): any {
     return data
       .replace(/AIzaSy[A-Za-z0-9_-]{33}/g, "AIzaSy***REDACTED***")
       .replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "jwt***REDACTED***")
-      .replace(/(?:api_?key|password|secret|token|private_?key)\s*[:=]\s*["']?([^\s"']+)["']?/gi, "$1: [REDACTED]");
+      .replace(/((?:api_?key|password|secret|token|private_?key)\s*[:=]\s*)["']?[^\s"']+["']?/gi, "$1[REDACTED]");
   }
   if (typeof data === "object") {
     try {
@@ -65,7 +65,7 @@ class CentralLogger {
         if (saved) {
           this.logs = JSON.parse(saved);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -78,13 +78,13 @@ class CentralLogger {
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("sf_recent_logs", JSON.stringify(this.logs.slice(0, 50)));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     this.listeners.forEach((listener) => {
       try {
         listener(entry);
-      } catch (e) {}
+      } catch (e) { }
     });
   }
 
@@ -102,11 +102,11 @@ class CentralLogger {
     };
 
     if (level === "error") {
-      console.error(`[${context}] ${message}`, details || "");
+      console.error(`[${context}] ${cleanMessage}`, cleanDetails || "");
     } else if (level === "warn") {
-      console.warn(`[${context}] ${message}`, details || "");
+      console.warn(`[${context}] ${cleanMessage}`, cleanDetails || "");
     } else {
-      console.log(`[${context}] ${message}`, details || "");
+      console.log(`[${context}] ${cleanMessage}`, cleanDetails || "");
     }
 
     this.emit(entry);
@@ -144,7 +144,7 @@ class CentralLogger {
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("sf_recent_logs");
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 }
