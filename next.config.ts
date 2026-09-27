@@ -7,9 +7,6 @@ const nextConfig: NextConfig = {
     'ais-dev-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app',
     'ais-pre-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app'
   ],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   env: {
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'vsnry-labs-b4d4f',
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'vsnry-labs-b4d4f.firebaseapp.com',
