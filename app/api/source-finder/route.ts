@@ -4,8 +4,6 @@ import { RateLimiter } from "limiter";
 import reputationMap from "@/config/reputation-map.json";
 import { getGeminiClient, generateContentWithFallback, formatGeminiError } from "@/lib/gemini";
 import { withAiApiValidation } from "@/lib/middleware";
-import { db } from "@/lib/firebase";
-import { doc, updateDoc, increment } from "firebase/firestore";
 
 // --- CONFIGURACIÓN DEL RATE LIMITER ---
 const limiter = new RateLimiter({ tokensPerInterval: 10, interval: 900000 });
@@ -190,7 +188,7 @@ export const POST = withAiApiValidation(async function POST(req: NextRequest) {
 
     // --- SANITIZACIÓN DE ENTRADA ---
     if (inputTopic.length > 200) {
-        return NextResponse.json({ status: "error", message: "El tema de investigación es demasiado largo." }, { status: 400 });
+      return NextResponse.json({ status: "error", message: "El tema de investigación es demasiado largo." }, { status: 400 });
     }
 
     // Process excluded keywords filter
@@ -300,7 +298,7 @@ Analiza críticamente la información y sé sumamente veraz. Evita sesgos y clic
             const domain = new URL(uri).hostname;
             const repData = getDomainReputation(uri);
             const title = chunk.web.title || `Fuente (${domain})`;
-            
+
             // Check for excluded keywords
             const matchedExclusion = excludedKeywords.find((kw) =>
               domain.toLowerCase().includes(kw) ||

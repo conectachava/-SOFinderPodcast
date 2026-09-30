@@ -12,7 +12,7 @@
 - The callback stores a Hub-provided token in browser `localStorage`. This repository does not define the token issuer or a server-side verifier. Until that contract is integrated and tested, the token is not a trusted identity.
 - API routes do not consistently verify identity. The `User-Agent` denylist in `lib/middleware.ts` only blocks trivial scanners and is not authentication, rate limiting, or cost protection. Do not expose AI-backed routes publicly without server-side identity, authorization, request limits, and abuse monitoring.
 - Client-side roles are display state only. They must not authorize sensitive operations.
-- The lockfile audit on 2026-09-27 reduced findings from 15 to 5 moderate advisories. The remaining findings are transitive dependencies of `firebase-tools`; npm reports that eliminating them requires a breaking downgrade. Review before changing the Firebase CLI major version.
+- The root Firebase CLI is pinned by the lockfile to the patched 15.x line. Scoped npm overrides keep its Pub/Sub and gRPC dependencies on patched versions without changing application runtime dependencies. The current lockfile reports zero vulnerabilities with `npm audit`.
 
 ## Reporting
 

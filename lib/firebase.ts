@@ -20,8 +20,24 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
 
-export const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
-export const storage = getStorage(app);
+let dbInstance: any = undefined;
+let storageInstance: any = undefined;
+
+export const db: any = (() => {
+  if (typeof window === 'undefined') return undefined;
+  if (!dbInstance) {
+    dbInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+  }
+  return dbInstance;
+})();
+
+export const storage: any = (() => {
+  if (typeof window === 'undefined') return undefined;
+  if (!storageInstance) {
+    storageInstance = getStorage(app);
+  }
+  return storageInstance;
+})();
 
 /**
  * Utilitario para limpiar la caché de persistencia de Firestore.
