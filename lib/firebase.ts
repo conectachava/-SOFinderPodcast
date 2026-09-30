@@ -3,13 +3,17 @@ import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 let rawFirebaseConfig: Record<string, any> = {};
 
+const defaultProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'vsnry-labs-b4d4f';
+const defaultAuthDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || `${defaultProjectId}.firebaseapp.com`;
+const defaultStorageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${defaultProjectId}.firebasestorage.app`;
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || rawFirebaseConfig.apiKey,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || rawFirebaseConfig.authDomain,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || rawFirebaseConfig.projectId,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || rawFirebaseConfig.storageBucket,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || rawFirebaseConfig.messagingSenderId,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || rawFirebaseConfig.appId,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || rawFirebaseConfig.apiKey || 'demo-api-key',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || rawFirebaseConfig.authDomain || defaultAuthDomain,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || rawFirebaseConfig.projectId || defaultProjectId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || rawFirebaseConfig.storageBucket || defaultStorageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || rawFirebaseConfig.messagingSenderId || '000000000000',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || rawFirebaseConfig.appId || '1:000000000000:web:demo-app-id',
   firestoreDatabaseId: (rawFirebaseConfig as any).firestoreDatabaseId
 };
 
@@ -33,12 +37,12 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
             if (
               dbInfo.name &&
               (dbInfo.name.toLowerCase().includes("firebase") ||
-               dbInfo.name.toLowerCase().includes("firestore") ||
-               dbInfo.name.toLowerCase().includes("firebaselocalstorage"))
+                dbInfo.name.toLowerCase().includes("firestore") ||
+                dbInfo.name.toLowerCase().includes("firebaselocalstorage"))
             ) {
               try {
                 indexedDB.deleteDatabase(dbInfo.name);
-              } catch (e) {}
+              } catch (e) { }
             }
           }
         }
@@ -54,7 +58,7 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
         for (const dbName of knownDBs) {
           try {
             indexedDB.deleteDatabase(dbName);
-          } catch (e) {}
+          } catch (e) { }
         }
       } catch (idbErr) {
         console.warn("[clearFirestoreAuthCache] IndexedDB notice:", idbErr);
@@ -71,19 +75,19 @@ export async function clearFirestoreAuthCache(): Promise<boolean> {
             if (
               key &&
               (key.toLowerCase().includes("firebase") ||
-               key.toLowerCase().includes("firestore") ||
-               key.toLowerCase().includes("auth") ||
-               key.startsWith("sf_auth"))
+                key.toLowerCase().includes("firestore") ||
+                key.toLowerCase().includes("auth") ||
+                key.startsWith("sf_auth"))
             ) {
               keysToRemove.push(key);
             }
           }
           keysToRemove.forEach((k) => {
-            try { localStorage.removeItem(k); } catch (e) {}
+            try { localStorage.removeItem(k); } catch (e) { }
           });
         }
         if (window.sessionStorage) {
-          try { sessionStorage.clear(); } catch (e) {}
+          try { sessionStorage.clear(); } catch (e) { }
         }
       } catch (e) {
         console.warn("[clearFirestoreAuthCache] Error al limpiar Storage:", e);
