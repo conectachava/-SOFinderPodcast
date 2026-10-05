@@ -25,7 +25,7 @@ export function SourceBadge({ score, qualified }: SourceBadgeProps) {
 
   return (
     <div className="flex flex-col gap-1.5 w-full max-w-[120px]">
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border ${color} w-fit`}>
+      <div className={`flex items-center gap-1.5 text-[10px] font-medium ${color.replace('bg-', 'text-').split(' ')[1]}`}>
         {score >= 0.6 ? (
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
         ) : (
@@ -33,18 +33,21 @@ export function SourceBadge({ score, qualified }: SourceBadgeProps) {
         )}
         <span>{widthPct.toFixed(0)}% Trust</span>
         {qualified !== undefined && (
-          <span className="ml-1 opacity-80">
-            {qualified ? (
-              <CheckCircle className="w-3 h-3 text-emerald-600 inline" />
-            ) : (
-              <XCircle className="w-3 h-3 text-rose-600 inline" />
-            )}
-          </span>
+          <>
+            <span className="mx-0.5 opacity-50" aria-hidden="true">·</span>
+            <span>
+              {qualified ? (
+                <CheckCircle className="w-3 h-3 text-emerald-600 inline" />
+              ) : (
+                <XCircle className="w-3 h-3 text-rose-600 inline" />
+              )}
+            </span>
+          </>
         )}
-      </span>
-      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+      </div>
+      <div className="w-full h-1 bg-slate-200/60 rounded-full overflow-hidden">
         <div 
-          className={`h-full ${barColor} rounded-full`} 
+          className={`h-full ${barColor} rounded-full transition-all duration-500`} 
           style={{ width: `${widthPct}%` }}
         />
       </div>

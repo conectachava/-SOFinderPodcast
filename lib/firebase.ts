@@ -1,24 +1,85 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, setDoc, getDoc, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-let rawFirebaseConfig: Record<string, any> = {};
-
-const defaultProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'vsnry-labs-b4d4f';
-const defaultAuthDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || `${defaultProjectId}.firebaseapp.com`;
-const defaultStorageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${defaultProjectId}.firebasestorage.app`;
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || rawFirebaseConfig.apiKey || 'demo-api-key',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || rawFirebaseConfig.authDomain || defaultAuthDomain,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || rawFirebaseConfig.projectId || defaultProjectId,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || rawFirebaseConfig.storageBucket || defaultStorageBucket,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || rawFirebaseConfig.messagingSenderId || '000000000000',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || rawFirebaseConfig.appId || '1:000000000000:web:demo-app-id',
-  firestoreDatabaseId: (rawFirebaseConfig as any).firestoreDatabaseId
-};
+import { getAuth } from 'firebase/auth';
+import firebaseConfig from '../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
+
+let authInstance: any = undefined;
+
+export const auth: any = (() => {
+  if (typeof window === 'undefined') return undefined;
+  if (!authInstance) {
+    authInstance = getAuth(app);
+  }
+  return authInstance;
+})();
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData?.map((provider: any) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Validates connection to Firestore as per security standards.
+ */
+export async function testConnection() {
+  if (typeof window === 'undefined') return;
+  try {
+    await getDocFromServer(doc(db, '_system_', 'connection_test'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
+  }
+}
+if (typeof window !== 'undefined') {
+  testConnection();
+}
 
 let dbInstance: any = undefined;
 let storageInstance: any = undefined;
@@ -128,11 +189,7 @@ export async function safeSetDoc(docRef: any, data: any, options?: any) {
     logger.info(`[FS_WRITE_SUCCESS] Escritura en Firestore confirmada en '${docRef?.path || "documento"}'`, { path: docRef?.path }, "Firestore");
     return res;
   } catch (err: any) {
-    logger.error(`[FS_SAVE_FAIL] Error al guardar documento en Firestore (${docRef?.path || "doc"}): ${err.message}`, {
-      path: docRef?.path,
-      error: err.message,
-    }, "Firestore");
-    throw err;
+    handleFirestoreError(err, OperationType.WRITE, docRef?.path || null);
   }
 }
 
@@ -146,11 +203,7 @@ export async function safeGetDoc(docRef: any) {
     logger.info(`[FS_READ_SUCCESS] Lectura de Firestore completada en '${docRef?.path || "documento"}'`, { path: docRef?.path, exists: docSnap.exists() }, "Firestore");
     return docSnap;
   } catch (err: any) {
-    logger.error(`[FS_SYNC_FAIL] Error de sincronización al leer Firestore (${docRef?.path || "doc"}): ${err.message}`, {
-      path: docRef?.path,
-      error: err.message,
-    }, "Firestore");
-    throw err;
+    handleFirestoreError(err, OperationType.GET, docRef?.path || null);
   }
 }
 

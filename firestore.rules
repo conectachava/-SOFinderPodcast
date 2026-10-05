@@ -1,11 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny catch-all
+    // Default deny catch-all (Pillar 1: Master Gate)
     match /{document=**} {
       allow read, write: if false;
     }
 
+    // Helper Primitives (Pillar 2: Validation Blueprints)
     function isSignedIn() {
       return request.auth != null;
     }
@@ -19,7 +20,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      // Bootstrap vsnrylabs@gmail.com as admin with mandatory verified email check
+      // Identity isolation: admin roles must be verified server-side
       return isSignedIn() && (
         (request.auth.token.email == 'vsnrylabs@gmail.com' && request.auth.token.email_verified == true) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
@@ -30,45 +31,31 @@ service cloud.firestore {
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
+    // Entity Validations (Pillar 2)
     function isValidUserProfile(data) {
       return data.keys().hasAll(['name', 'email', 'status'])
-        && data.keys().size() <= 12
+        && data.keys().size() <= 15
         && data.name is string && data.name.size() <= 100
         && data.email is string && data.email.size() <= 200
         && data.status in ['pending', 'approved', 'rejected']
         && ( !('preferredFormat' in data) || (data.preferredFormat in ['Debate', 'Análisis', 'Opinión']) )
         && ( !('customHostVoice' in data) || (data.customHostVoice is string && data.customHostVoice.size() <= 100) )
         && ( !('episodesCount' in data) || (data.episodesCount is number) )
-        && ( !('autoArchive' in data) || (data.autoArchive is bool) )
         && ( !('monthlyTokenUsage' in data) || (data.monthlyTokenUsage is number) )
-        && ( !('contentFilters' in data) || true )
-        && ( !('updatedAt' in data) || true );
+        && ( !('updatedAt' in data) || data.updatedAt is string );
     }
 
     function isValidPodcastHistory(data) {
       return data.keys().hasAll(['id', 'title', 'status', 'date'])
-        && data.keys().size() <= 10
+        && data.keys().size() <= 12
         && data.id is string && data.id.size() <= 100
         && data.title is string && data.title.size() <= 200
         && data.status in ['Ready', 'Failed', 'Processing']
         && data.date is string && data.date.size() <= 50
         && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
-        && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 200) )
-        && ( !('format' in data) || (data.format is string && data.format.size() <= 100) )
         && ( !('duration' in data) || (data.duration is string && data.duration.size() <= 20) )
-        && ( !('sourceUrls' in data) || (data.sourceUrls is list && data.sourceUrls.size() <= 100) );
-    }
-
-    function isValidDraft(data) {
-      return data.keys().hasAll(['updatedAt'])
-        && data.keys().size() <= 10
-        && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
-        && ( !('scriptText' in data) || (data.scriptText is string && data.scriptText.size() <= 100000) )
-        && ( !('reportText' in data) || (data.reportText is string && data.reportText.size() <= 100000) )
-        && ( !('rawScript' in data) || (data.rawScript is string && data.rawScript.size() <= 100000) )
-        && ( !('scriptLines' in data) || (data.scriptLines is list) )
-        && ( !('format' in data) || (data.format is string && data.format.size() <= 100) )
-        && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 200) );
+        && ( !('sourceUrls' in data) || (data.sourceUrls is list && data.sourceUrls.size() <= 100) )
+        && ( !('tags' in data) || (data.tags is list && data.tags.size() <= 10) );
     }
 
     function isValidVoiceProfile(data) {
@@ -82,38 +69,42 @@ service cloud.firestore {
         && data.updatedAt is string;
     }
 
-    function isValidReport(data) {
-      return data.keys().hasAll(['topic', 'content', 'createdAt'])
-        && data.keys().size() <= 5
-        && data.topic is string && data.topic.size() <= 500
-        && data.content is string;
+    function isValidDraft(data) {
+      return data.keys().hasAll(['updatedAt'])
+        && data.keys().size() <= 10
+        && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
+        && ( !('scriptText' in data) || (data.scriptText is string && data.scriptText.size() <= 100000) )
+        && ( !('reportText' in data) || (data.reportText is string && data.reportText.size() <= 100000) )
+        && ( !('rawScript' in data) || (data.rawScript is string && data.rawScript.size() <= 100000) )
+        && ( !('updatedAt' in data) || data.updatedAt is string );
     }
 
-    function isValidSavedTopic(data) {
-      return data.keys().hasAll(['topic', 'createdAt'])
-        && data.keys().size() <= 3
-        && data.topic is string && data.topic.size() <= 500;
-    }
-
+    // Rules Definitions (Pillar 3-8)
+    
     match /admins/{userId} {
       allow read: if isSignedIn();
     }
 
     match /users/{userId} {
+      // Pillar 8: Secure List Queries
       allow read: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
       
       allow create: if isOwner(userId) && isValidId(userId) 
-                    && isValidUserProfile(incoming());
+                    && isValidUserProfile(incoming())
+                    && incoming().email == request.auth.token.email; // Pillar 2: Identity Integrity
                     
       allow update: if isValidId(userId) && isValidUserProfile(incoming()) && (
-        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'autoArchive', 'contentFilters', 'monthlyTokenUsage', 'updatedAt']) && incoming().status == existing().status) ||
+        // Pillar 4: Tiered Identity Logic
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'monthlyTokenUsage', 'updatedAt', 'contentFilters']) 
+         && incoming().status == existing().status) ||
         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
       );
-      allow delete: if isAdmin() || isOwner(userId);
+      allow delete: if isAdmin(); // Users cannot delete themselves normally
 
       match /drafts/{draftId} {
         allow read, list: if isOwner(userId);
+        // Pillar 3: Path Variable Hardening
         allow create, update: if isOwner(userId) && isValidId(draftId) && isValidDraft(incoming());
         allow delete: if isOwner(userId);
       }
@@ -126,20 +117,11 @@ service cloud.firestore {
 
       match /history/{historyId} {
         allow read, list: if isOwner(userId) || isAdmin();
+        // Pillar 11: Global Consistency Invariant
         allow create: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming());
-        allow update: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'duration', 'sourceUrls', 'topic']);
-        allow delete: if isOwner(userId) || isAdmin();
-      }
-
-      match /reports/{reportId} {
-        allow read, list: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidId(reportId) && isValidReport(incoming());
-        allow delete: if isOwner(userId) || isAdmin();
-      }
-
-      match /savedTopics/{topicId} {
-        allow read, list: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidId(topicId) && isValidSavedTopic(incoming());
+        // Pillar 4 Action-Based Updates
+        allow update: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming()) 
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'duration', 'sourceUrls', 'topic', 'tags']);
         allow delete: if isOwner(userId) || isAdmin();
       }
     }

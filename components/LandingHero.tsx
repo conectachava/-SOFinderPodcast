@@ -46,9 +46,11 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
       <div className="relative z-10 max-w-6xl mx-auto space-y-8">
         {/* Top Header & Tagline (Google Cloud Light Style) */}
         <div className="text-center space-y-4 max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[#1a73e8] dark:text-blue-300 rounded-full text-xs font-semibold tracking-wide shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#1a73e8]" />
-            <span>ARQUITECTURA DE IA • GEMINI 2.0 & GOOGLE SEARCH GROUNDING</span>
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold tracking-wide text-[#1a73e8] dark:text-blue-300">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>ARQUITECTURA DE IA</span>
+            <span className="opacity-30" aria-hidden="true">·</span>
+            <span>GEMINI 3.5 & GOOGLE SEARCH GROUNDING</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight text-slate-900 dark:text-white">
@@ -119,9 +121,11 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#ea4335]"></div>
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-1 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-[#ea4335] dark:text-red-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Desafío #1: Alucinaciones & Fake News
-                  </span>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase font-mono text-[#ea4335] dark:text-red-300">
+                    <span>Desafío #1</span>
+                    <span className="opacity-30" aria-hidden="true">/</span>
+                    <span>Alucinaciones & Fake News</span>
+                  </div>
                   <span className="text-xs text-slate-500 font-mono">Ahorro: 8+ horas</span>
                 </div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Riesgo de publicar datos sin verificar o fuentes no confiables</h3>
@@ -141,9 +145,11 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#fbbc04]"></div>
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Desafío #2: Guiones Monótonos
-                  </span>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase font-mono text-amber-700 dark:text-amber-300">
+                    <span>Desafío #2</span>
+                    <span className="opacity-30" aria-hidden="true">/</span>
+                    <span>Guiones Monótonos</span>
+                  </div>
                   <span className="text-xs text-slate-500 font-mono">Objetivo: Máxima Retención</span>
                 </div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Narrativas lineales sin estructura dramática ni dinamismo</h3>
@@ -163,9 +169,11 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a73e8]"></div>
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[#1a73e8] dark:text-blue-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Desafío #3: Dispersión de Herramientas
-                  </span>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase font-mono text-[#1a73e8] dark:text-blue-300">
+                    <span>Desafío #3</span>
+                    <span className="opacity-30" aria-hidden="true">/</span>
+                    <span>Dispersión de Herramientas</span>
+                  </div>
                   <span className="text-xs text-slate-500 font-mono">Beneficio: Flujo Unificado</span>
                 </div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Diversas plataformas desconectadas para completar un episodio</h3>
@@ -185,9 +193,11 @@ export function LandingHero({ onStartNow, onOpenLogin }: LandingHeroProps) {
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 relative overflow-hidden shadow-xs">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#34a853]"></div>
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded text-[11px] font-semibold uppercase font-mono">
-                    Desafío #4: Costos Elevados
-                  </span>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase font-mono text-emerald-700 dark:text-emerald-300">
+                    <span>Desafío #4</span>
+                    <span className="opacity-30" aria-hidden="true">/</span>
+                    <span>Costos Elevados</span>
+                  </div>
                   <span className="text-xs text-slate-500 font-mono">Ahorro: Hasta 92%</span>
                 </div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Altas inversiones requeridas en producción tradicional</h3>

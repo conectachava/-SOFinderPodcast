@@ -240,7 +240,7 @@ export function NarrativeArcChart({ scriptLines }: NarrativeArcChartProps) {
       .attr("stroke-width", 2)
       .style("cursor", "pointer")
       .on("mouseover", (event, d) => {
-        d3.select(event.currentTarget)
+        d3.select(event.currentTarget as any)
           .transition()
           .duration(150)
           .attr("r", 8)
@@ -248,7 +248,7 @@ export function NarrativeArcChart({ scriptLines }: NarrativeArcChartProps) {
         setHoveredPoint(d);
       })
       .on("mouseout", (event) => {
-        d3.select(event.currentTarget)
+        d3.select(event.currentTarget as any)
           .transition()
           .duration(150)
           .attr("r", 4.5)

@@ -20,9 +20,9 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://ais-dev-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app'),
-  title: 'SourceFinder Pod — Plataforma de Investigación AI & Podcasts Multivoz',
-  description: 'Plataforma líder en investigación automatizada, verificación de fuentes con Google Search Grounding y producción de podcasts multivoz impulsados por Gemini 2.0 AI.',
-  keywords: 'SourceFinder Pod, Podcast IA, Generador de Podcasts, Verificación de Fuentes, Google Search Grounding, Gemini AI, TTS Multivoz',
+  title: 'SourceFinder Pod',
+  description: 'Automated Intelligence Gathering & Multi-Voice Podcast Generation Platform powered by Gemini AI.',
+  keywords: 'SourceFinder Pod, Podcast AI, Generador de Podcasts, Verificación de Fuentes, Google Search Grounding, Gemini AI, TTS Multivoz',
   authors: [{ name: 'VSNRY LABS' }],
   creator: 'VSNRY LABS',
   publisher: 'SourceFinder Pod',
@@ -31,8 +31,8 @@ export const metadata: Metadata = {
     icon: '/icon.svg',
   },
   openGraph: {
-    title: 'SourceFinder Pod — Plataforma de Investigación AI & Podcasts Multivoz',
-    description: 'Investiga fuentes verificadas en tiempo real, redacta guiones periodísticos multivoz y produce podcasts de nivel profesional en minutos.',
+    title: 'SourceFinder Pod',
+    description: 'Automated Intelligence Gathering & Multi-Voice Podcast Generation Platform powered by Gemini AI.',
     url: '/',
     siteName: 'SourceFinder Pod',
     locale: 'es_ES',
@@ -40,8 +40,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SourceFinder Pod — Plataforma de Investigación AI & Podcasts Multivoz',
-    description: 'Investiga fuentes verificadas en tiempo real, redacta guiones periodísticos multivoz y produce podcasts de nivel profesional en minutos.',
+    title: 'SourceFinder Pod',
+    description: 'Automated Intelligence Gathering & Multi-Voice Podcast Generation Platform powered by Gemini AI.',
   },
 };
 

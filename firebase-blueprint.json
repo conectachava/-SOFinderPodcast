@@ -5,20 +5,20 @@
       "description": "Stores user preferences and status",
       "type": "object",
       "properties": {
-        "name": { "type": "string", "maxLength": 100 },
-        "email": { "type": "string", "maxLength": 200 },
-        "preferredFormat": { "type": "string", "enum": ["Debate", "Análisis", "Opinión"] },
-        "customHostVoice": { "type": "string", "maxLength": 100 },
-        "episodesCount": { "type": "number" },
-        "updatedAt": { "type": "string", "description": "Server timestamp" },
-        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
-        "isAdmin": { "type": "boolean" },
+        "name": { "type": "string", "maxLength": 100, "description": "Full name of the user" },
+        "email": { "type": "string", "maxLength": 200, "description": "Verified email address" },
+        "preferredFormat": { "type": "string", "enum": ["Debate", "Análisis", "Opinión"], "description": "Default podcast format" },
+        "customHostVoice": { "type": "string", "maxLength": 100, "description": "Selected host voice ID" },
+        "episodesCount": { "type": "number", "description": "Total episodes generated" },
+        "updatedAt": { "type": "string", "description": "Server timestamp of last update" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Account approval status" },
+        "isAdmin": { "type": "boolean", "description": "Privileged administrative access" },
         "monthlyTokenUsage": { "type": "number", "description": "Tokens consumed in current month" },
         "contentFilters": {
           "type": "object",
           "properties": {
             "minReputation": { "type": "number" },
-            "excludedKeywords": { "type": "array", "items": { "type": "string" } }
+            "excludedKeywords": { "type": "array", "items": { "type": "string", "maxLength": 50 } }
           }
         }
       },
@@ -39,7 +39,8 @@
           "type": "array",
           "items": { "type": "string", "maxLength": 500 },
           "maxLength": 100
-        }
+        },
+        "tags": { "type": "array", "items": { "type": "string", "maxLength": 30 }, "maxLength": 10 }
       },
       "required": ["id", "title", "status", "date"]
     },
@@ -56,20 +57,37 @@
         "updatedAt": { "type": "string", "maxLength": 100 }
       },
       "required": ["role", "pitch", "speed", "warmth", "updatedAt"]
+    },
+    "DraftSession": {
+      "title": "Draft Session",
+      "description": "In-progress podcast session data",
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string", "maxLength": 500 },
+        "scriptText": { "type": "string", "maxLength": 100000 },
+        "reportText": { "type": "string", "maxLength": 100000 },
+        "rawScript": { "type": "string", "maxLength": 100000 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["updatedAt"]
     }
   },
   "firestore": {
     "users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document"
+      "description": "Main user settings and profile data"
     },
     "users/{userId}/history/{historyId}": {
       "schema": "PodcastHistory",
-      "description": "History of generated podcasts"
+      "description": "Log of generated podcasts"
     },
     "users/{userId}/voiceProfiles/{profileId}": {
       "schema": "VoiceProfile",
-      "description": "Persisted voice profile settings for consistent branding"
+      "description": "Personalized voice configurations"
+    },
+    "users/{userId}/drafts/{draftId}": {
+      "schema": "DraftSession",
+      "description": "Active session drafts for recovery"
     }
   }
 }

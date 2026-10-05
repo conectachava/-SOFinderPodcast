@@ -99,10 +99,10 @@ export function SentimentBadge({
 
   return (
     <span
-      className={`inline-flex items-center font-medium rounded-full border shadow-2xs ${details.badgeClass} ${sizeClasses} ${className}`}
+      className={`inline-flex items-center font-medium ${details.iconClass} ${sizeClasses} ${className}`}
       title={`Tono emocional detectado por Gemini: ${details.label}`}
     >
-      <IconComponent className={`${iconSizes} ${details.iconClass} shrink-0`} />
+      <IconComponent className={`${iconSizes} shrink-0`} />
       {showText && <span>{details.label}</span>}
     </span>
   );
