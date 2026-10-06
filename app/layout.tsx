@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://ais-dev-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app'),
+  metadataBase: new URL('https://ia.conectachava.com'),
   title: 'SourceFinder Pod',
   description: 'Automated Intelligence Gathering & Multi-Voice Podcast Generation Platform powered by Gemini AI.',
   keywords: 'SourceFinder Pod, Podcast AI, Generador de Podcasts, Verificación de Fuentes, Google Search Grounding, Gemini AI, TTS Multivoz',
@@ -50,9 +50,9 @@ const jsonLdSchema = {
   '@graph': [
     {
       '@type': 'WebApplication',
-      '@id': 'https://ais-dev-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app/#webapp',
+      '@id': 'https://ia.conectachava.com/#webapp',
       'name': 'SourceFinder Pod',
-      'url': 'https://ais-dev-6uz52gv5plsbm5qyowpnha-7486352881.us-east1.run.app',
+      'url': 'https://ia.conectachava.com',
       'description': 'Plataforma de inteligencia automatizada, fact-checking periodístico y producción de podcasts multivoz con síntesis de audio HD impulsada por Google Gemini AI.',
       'applicationCategory': 'MultimediaApplication',
       'operatingSystem': 'All',
