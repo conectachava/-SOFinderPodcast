@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 // Firebase Cloud Messaging Service Worker for SourceFinder Pod
 // Background Push Notification Handler
 

@@ -31,9 +31,12 @@ export function getAdminApp(): App {
     return getApp();
   }
 
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const clientEmail = (
+    process.env.FIREBASE_CLIENT_EMAIL ||
+    process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL
+  )?.trim();
   const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
-  const privateKey = formatPrivateKey(rawPrivateKey);
+  let effectivePrivateKey = formatPrivateKey(rawPrivateKey);
 
   let serviceAccountKeyObj: any = null;
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
@@ -48,14 +51,16 @@ export function getAdminApp(): App {
             serviceAccountKeyObj.private_key = formatPrivateKey(serviceAccountKeyObj.private_key);
           }
         }
-      } catch (e) {
-        console.warn('[Firebase Admin] Error parsing FIREBASE_SERVICE_ACCOUNT_KEY JSON:', e);
+      } catch {
+        // Ignore JSON parse error
       }
+    } else if (rawVal.includes('BEGIN PRIVATE KEY')) {
+      effectivePrivateKey = formatPrivateKey(rawVal);
     }
   }
 
   // Validate that serviceAccountKeyObj is a complete service account object before passing to cert()
-  // Never pass raw strings or incomplete objects to cert() to prevent ENOENT file errors
+  // Never pass raw strings to cert() to prevent ENOENT file errors
   if (
     serviceAccountKeyObj &&
     typeof serviceAccountKeyObj === 'object' &&
@@ -65,7 +70,11 @@ export function getAdminApp(): App {
   ) {
     try {
       return initializeApp({
-        credential: cert(serviceAccountKeyObj),
+        credential: cert({
+          projectId: serviceAccountKeyObj.project_id || projectId,
+          clientEmail: serviceAccountKeyObj.client_email,
+          privateKey: serviceAccountKeyObj.private_key,
+        }),
         projectId: serviceAccountKeyObj.project_id || projectId,
         storageBucket: rawFirebaseConfig.storageBucket || undefined,
       });
@@ -74,13 +83,13 @@ export function getAdminApp(): App {
     }
   }
 
-  if (clientEmail && privateKey && privateKey.includes('BEGIN PRIVATE KEY')) {
+  if (clientEmail && effectivePrivateKey && effectivePrivateKey.includes('BEGIN PRIVATE KEY')) {
     try {
       return initializeApp({
         credential: cert({
           projectId,
           clientEmail,
-          privateKey,
+          privateKey: effectivePrivateKey,
         }),
         projectId,
         storageBucket: rawFirebaseConfig.storageBucket || undefined,

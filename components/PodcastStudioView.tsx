@@ -2665,7 +2665,7 @@ export function PodcastStudioView({
         isOpen={isSocialShareModalOpen}
         onClose={() => setIsSocialShareModalOpen(false)}
         topic={topic}
-        podcastId={podcastEpisodeId.current}
+        podcastId={podcastEpisodeId}
         coverArtUrl={coverArt}
         durationFormatted={estimatedMinutesSeconds || "~12 min"}
         scriptLines={lines}
