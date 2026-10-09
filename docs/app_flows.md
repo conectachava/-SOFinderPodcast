@@ -105,4 +105,4 @@ Este documento detalla la lógica de flujo de datos, la canalización multiagent
     Notificador UI de Sincronización ("Guardado")
 ```
 
-  En el estado actual, el proveedor no establece usuario autenticado: el token del Hub se guarda, pero no se verifica y no habilita la rama de Firestore. El autosave y el historial en nube no están disponibles mediante ese flujo. El middleware AI filtra algunos `User-Agent`, pero no autentica solicitudes directas. La verificación de identidad y autorización por ruta sigue pendiente; véase [SECURITY.md](../SECURITY.md).
+  La interfaz principal e inicio (`Landing`) se cargan directamente sin redirección forzada al dominio externo `gs.conectachava.com`. El inicio de sesión interactivo utiliza Firebase Authentication (`signInWithPopup` con proveedor Google), mientras que el token del callback del Hub (si se recibe) no establece por sí mismo un usuario autenticado ni privilegios hasta contar con verificación server-side; véase [SECURITY.md](../SECURITY.md).

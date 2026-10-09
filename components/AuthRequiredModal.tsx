@@ -19,8 +19,10 @@ export function AuthRequiredModal({ isOpen, onClose, featureName = "esta funció
 
   const handleGoogleLogin = async () => {
     try {
-      await loginWithGoogle();
-      addToast("Autenticación Iniciada", "Redirigiendo al Hub...", "success");
+      const signedInUser = await loginWithGoogle();
+      if (signedInUser) {
+        addToast("Autenticación Completada", "Sesión iniciada con Google correctamente.", "success");
+      }
       onClose();
     } catch (error) {
       console.error(error);

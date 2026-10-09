@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal, Cpu } from "lucide-react";
+import { User, Key, Check, X, Shield, Save, LogOut, Clock, Users, BarChart3, Mic, Upload, Trash2, Sparkles, Play, Square, Database, Archive, RefreshCw, AlertCircle, Terminal, Cpu, Sun, Moon, Monitor, Palette } from "lucide-react";
 import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useAuth, UserProfileWithStatus } from "../app/AuthProvider";
 import { clearFirestoreAuthCache, db } from "../lib/firebase";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { GeminiDiagnosticView } from "./GeminiDiagnosticView";
+import { VoiceClone } from "./VoiceClone";
+import { useThemeConfig, type ThemePreference } from "../hooks/useThemeConfig";
 
 export interface UserProfile {
   name: string;
@@ -18,6 +20,7 @@ export interface UserProfile {
   isLoggedIn?: boolean;
   autoArchive?: boolean;
   draftRetentionDays?: number;
+  themePreference?: ThemePreference;
 }
 
 export interface VoiceProfile {
@@ -40,6 +43,8 @@ interface UserProfileModalProps {
   onToggleSystemSync?: (val: boolean) => void;
   themeSchedule?: boolean;
   onToggleThemeSchedule?: (val: boolean) => void;
+  themePreference?: ThemePreference;
+  onChangeThemePreference?: (pref: ThemePreference) => void;
   initialTab?: "profile" | "analytics" | "voice" | "tokens" | "diagnostic" | "admin";
 }
 
@@ -53,10 +58,133 @@ export function UserProfileModal({
   onToggleSystemSync,
   themeSchedule = false,
   onToggleThemeSchedule,
+  themePreference: propThemePreference,
+  onChangeThemePreference,
   initialTab,
 }: UserProfileModalProps) {
   const router = useRouter();
-  const { user, profile: authProfile, isAdmin, setProfile, loginWithGoogle } = useAuth();
+  const { user, profile: authProfile, isAdmin, setProfile, loginWithGoogle, logout } = useAuth();
+  const {
+    theme: activeResolvedTheme,
+    themePreference: hookThemePreference,
+    setThemePreference: setHookThemePreference,
+  } = useThemeConfig();
+
+  const currentThemePreference: ThemePreference = propThemePreference ?? hookThemePreference;
+
+  const handleSelectThemePreference = (pref: ThemePreference) => {
+    setHookThemePreference(pref);
+    if (onChangeThemePreference) {
+      onChangeThemePreference(pref);
+    }
+    if (onToggleSystemSync) {
+      onToggleSystemSync(pref === "system");
+    }
+    if (localProfile) {
+      setLocalProfile({ ...localProfile, themePreference: pref });
+    }
+  };
+
+  const renderThemePreferenceSelector = () => {
+    const options: Array<{
+      id: ThemePreference;
+      label: string;
+      description: string;
+      icon: React.ElementType;
+    }> = [
+      {
+        id: "light",
+        label: "Siempre Claro",
+        description: "Superficie luminosa de alto contraste editorial",
+        icon: Sun,
+      },
+      {
+        id: "dark",
+        label: "Siempre Oscuro",
+        description: "Modo estudio profundo para sesiones prolongadas",
+        icon: Moon,
+      },
+      {
+        id: "system",
+        label: "Sincronizar con Sistema",
+        description: "Adapta automáticamente al tema del sistema operativo",
+        icon: Monitor,
+      },
+    ];
+
+    return (
+      <div
+        className="p-4 rounded-xl border space-y-3 theme-surface-card"
+        role="radiogroup"
+        aria-label="Selector de preferencias de tema"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 border border-indigo-200/70 dark:border-indigo-800/70">
+              <Palette className="w-4 h-4" />
+            </div>
+            <div>
+              <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                Apariencia y Preferencia de Tema
+              </h5>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                Transición fluida mediante variables CSS del sistema (<code className="font-mono">--gcp-*</code>)
+              </p>
+            </div>
+          </div>
+          <span className="gcp-badge-blue font-mono uppercase tracking-wider">
+            Activo: {activeResolvedTheme === "dark" ? "Oscuro" : "Claro"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {options.map((option) => {
+            const Icon = option.icon;
+            const isSelected = currentThemePreference === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => handleSelectThemePreference(option.id)}
+                className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 cursor-pointer transition-all ${
+                  isSelected
+                    ? "border-[#1a73e8] dark:border-[#8ab4f8] bg-[#e8f0fe]/60 dark:bg-[#1c2b46]/70 ring-1 ring-[#1a73e8] dark:ring-[#8ab4f8]"
+                    : "border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                      isSelected
+                        ? "bg-[#1a73e8] dark:bg-[#8ab4f8] text-white dark:text-slate-950"
+                        : "bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  {isSelected && (
+                    <span className="w-4 h-4 rounded-full bg-[#1a73e8] dark:bg-[#8ab4f8] text-white dark:text-slate-950 flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    {option.label}
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                    {option.description}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
   const [localProfile, setLocalProfile] = useState<UserProfileWithStatus | null>(authProfile);
   const [activeTab, setActiveTab] = useState<"profile" | "analytics" | "voice" | "tokens" | "diagnostic" | "admin">(
     initialTab || "profile"
@@ -321,7 +449,6 @@ export function UserProfileModal({
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalProfile(authProfile);
   }, [authProfile]);
 
@@ -361,12 +488,9 @@ export function UserProfileModal({
     }
   };
 
-  const handleLogout = () => {
-    // Limpiar credencial local
-    localStorage.removeItem('auth_token');
-
-    // Recargar la aplicación para que ProtectedRoute lo envíe al Hub
-    router.replace('/');
+  const handleLogout = async () => {
+    await logout();
+    onClose();
   };
 
   const handleSave = () => {
@@ -461,64 +585,63 @@ export function UserProfileModal({
         </div>
 
         {/* Tabs */}
-        {user && (
-          <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 overflow-x-auto">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 shrink-0 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`flex-1 py-3 px-2 text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${activeTab === "profile" ? "text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-indigo-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+          >
+            Mi Perfil
+          </button>
+          <button
+            onClick={() => setActiveTab("voice")}
+            className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "voice" ? "text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-indigo-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+          >
+            <Mic className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            Voice Clone
+          </button>
+          <button
+            onClick={() => setActiveTab("analytics")}
+            className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "analytics" ? "text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-indigo-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab("tokens")}
+            className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "tokens" ? "text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-indigo-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            Plan & Tokens
+          </button>
+          <button
+            onClick={() => setActiveTab("diagnostic")}
+            className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "diagnostic" ? "text-slate-900 border-b-2 border-slate-900 dark:text-white dark:border-indigo-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+          >
+            <Cpu className="w-3.5 h-3.5 text-emerald-500" />
+            Diagnóstico IA
+          </button>
+          {isAdmin && (
             <button
-              onClick={() => setActiveTab("profile")}
-              className={`flex-1 py-3 px-2 text-xs font-bold transition-colors whitespace-nowrap ${activeTab === "profile" ? "text-slate-900 border-b-2 border-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+              onClick={() => setActiveTab("admin")}
+              className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "admin" ? "text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-indigo-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
             >
-              Mi Perfil
+              <Shield className="w-3.5 h-3.5" />
+              Admin
             </button>
-            <button
-              onClick={() => setActiveTab("analytics")}
-              className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${activeTab === "analytics" ? "text-slate-900 border-b-2 border-slate-900" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              Analytics
-            </button>
-            <button
-              onClick={() => setActiveTab("voice")}
-              className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${activeTab === "voice" ? "text-slate-900 border-b-2 border-slate-900" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              <Mic className="w-3.5 h-3.5 text-indigo-600" />
-              Voice Identity
-            </button>
-            <button
-              onClick={() => setActiveTab("tokens")}
-              className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${activeTab === "tokens" ? "text-slate-900 border-b-2 border-slate-900" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Plan & Tokens
-            </button>
-            <button
-              onClick={() => setActiveTab("diagnostic")}
-              className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${activeTab === "diagnostic" ? "text-slate-900 border-b-2 border-slate-900 dark:text-white dark:border-white" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              <Cpu className="w-3.5 h-3.5 text-emerald-500" />
-              Diagnóstico IA
-            </button>
-            {isAdmin && (
-              <button
-                onClick={() => setActiveTab("admin")}
-                className={`flex-1 py-3 px-2 text-xs font-bold flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${activeTab === "admin" ? "text-slate-900 border-b-2 border-slate-900" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                <Shield className="w-3.5 h-3.5" />
-                Admin
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto">
-          {!user ? (
+          {!user && activeTab === "profile" ? (
             <div className="space-y-4">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
-                Inicia sesión con Google para guardar tu historial y solicitar acceso al sistema. Las solicitudes deben ser aprobadas por un administrador.
+              {renderThemePreferenceSelector()}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-600 dark:text-slate-300">
+                Inicia sesión con Google para sincronizar tu historial en la nube, o explora la pestaña <strong>Voice Clone</strong> para gestionar tus perfiles de voz IA.
               </div>
               <button
                 onClick={handleLoginRegister}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors"
+                className="w-full py-2.5 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
               >
                 <Key className="w-4 h-4" />
                 Iniciar Sesión con Google
@@ -712,205 +835,7 @@ export function UserProfileModal({
               </div>
             </div>
           ) : activeTab === "voice" ? (
-            <div className="space-y-5">
-              <div className="space-y-1">
-                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Mic className="w-4 h-4 text-indigo-600" />
-                  Identidad de Voz & Muestras Custom
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Sube o graba muestras de audio (5-15s) para crear perfiles de voz personalizados para tus locutores de podcast.
-                </p>
-              </div>
-
-              {/* Saved Voice Profiles List */}
-              <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
-                {voiceProfiles.map((vp) => (
-                  <div key={vp.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-slate-900">{vp.speakerName}</span>
-                        <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-mono font-semibold rounded">
-                          {vp.role}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handlePlayVoicePreview(vp)}
-                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${playingVoiceId === vp.id
-                            ? "bg-amber-500 text-slate-950 animate-pulse ring-2 ring-amber-400"
-                            : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                            }`}
-                          title="Reproducir muestra de audio en el sistema"
-                        >
-                          {playingVoiceId === vp.id ? (
-                            <>
-                              <Square className="w-3 h-3 text-slate-950 fill-slate-950" />
-                              <span>Detener</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-3 h-3 fill-current" />
-                              <span>Preview Audio</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteVoiceProfile(vp.id)}
-                          className="text-slate-400 hover:text-rose-600 text-xs p-1 rounded hover:bg-slate-200/50"
-                          title="Eliminar perfil"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 font-mono">
-                      <div>Acento: <strong>{vp.accent}</strong></div>
-                      <div>Tono: <strong>{vp.pitch}</strong></div>
-                    </div>
-
-                    {playingVoiceId === vp.id && (
-                      <div className="flex items-center gap-1 py-1 px-2.5 bg-slate-900 rounded-lg text-amber-300 text-[10px] font-mono animate-fadeIn">
-                        <span className="w-1.5 h-3 bg-amber-400 rounded-full animate-bounce [animation-delay:0.1s]" />
-                        <span className="w-1.5 h-4 bg-amber-300 rounded-full animate-bounce [animation-delay:0.2s]" />
-                        <span className="w-1.5 h-2 bg-amber-400 rounded-full animate-bounce [animation-delay:0.3s]" />
-                        <span className="w-1.5 h-3.5 bg-amber-300 rounded-full animate-bounce [animation-delay:0.15s]" />
-                        <span className="ml-1.5 font-bold text-amber-200">Reproduciendo muestra en el sistema...</span>
-                      </div>
-                    )}
-
-                    {vp.audioUrl ? (
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
-                        <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                          <Check className="w-3 h-3 text-emerald-500" />
-                          Muestra Personalizada ({vp.sampleDuration || "10s"})
-                        </span>
-                        <audio controls src={vp.audioUrl} className="h-6 w-36 shrink-0" />
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-amber-600 font-medium pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                        <span>⚠️ Muestra sintética estándar del sistema</span>
-                        <span className="text-slate-400 font-mono text-[9px]">{vp.sampleDuration}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Form to add custom voice profile */}
-              <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-3">
-                <h5 className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                  Agregar Nuevo Perfil de Voz
-                </h5>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Nombre Locutor</label>
-                    <input
-                      type="text"
-                      value={newVoiceName}
-                      onChange={(e) => setNewVoiceName(e.target.value)}
-                      placeholder="Ej. Carlos Moderador"
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Rol / Personaje</label>
-                    <select
-                      value={newVoiceRole}
-                      onChange={(e) => setNewVoiceRole(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="Moderador Principal">Moderador Principal</option>
-                      <option value="Analista Co-Host">Analista Co-Host</option>
-                      <option value="Invitado Especial">Invitado Especial</option>
-                      <option value="Voz de Apoyo">Voz de Apoyo</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Acento / Estilo</label>
-                    <input
-                      type="text"
-                      value={newVoiceAccent}
-                      onChange={(e) => setNewVoiceAccent(e.target.value)}
-                      placeholder="Ej. Español Latino, British"
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Tono de Voz</label>
-                    <select
-                      value={newVoicePitch}
-                      onChange={(e) => setNewVoicePitch(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="Grave / Cálido">Grave / Cálido</option>
-                      <option value="Medio / Dinámico">Medio / Dinámico</option>
-                      <option value="Agudo / Claro">Agudo / Claro</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Upload & Mic Recorder buttons */}
-                <div className="space-y-2 pt-1 border-t border-indigo-100">
-                  <label className="block text-[10px] font-bold text-slate-700">Muestra de Audio (MP3 / WAV / Mic)</label>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="file"
-                      accept="audio/*"
-                      ref={audioFileInputRef}
-                      onChange={handleAudioFileSelected}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => audioFileInputRef.current?.click()}
-                      className="flex-1 py-1.5 px-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-                    >
-                      <Upload className="w-3.5 h-3.5 text-slate-500" />
-                      <span className="truncate">{audioFileName ? audioFileName : "Subir Archivo"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={isRecording ? stopRecording : startRecording}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors shrink-0 ${isRecording
-                        ? "bg-rose-600 text-white animate-pulse"
-                        : "bg-slate-900 text-white hover:bg-slate-800"
-                        }`}
-                    >
-                      <Mic className="w-3.5 h-3.5" />
-                      {isRecording ? "Detener" : "Grabar Mic"}
-                    </button>
-                  </div>
-
-                  {audioSampleUrl && (
-                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs text-emerald-800">
-                      <span className="font-semibold text-[10px]">Muestra Cargada</span>
-                      <audio controls src={audioSampleUrl} className="h-6 w-36" />
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleSaveNewVoiceProfile}
-                  disabled={!newVoiceName.trim()}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-colors"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  Guardar Perfil de Voz
-                </button>
-              </div>
-            </div>
+            <VoiceClone />
           ) : activeTab === "tokens" ? (
             <div className="space-y-5">
               <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-3 relative overflow-hidden shadow-xl">
@@ -999,7 +924,7 @@ export function UserProfileModal({
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm">{authProfile?.name || user.displayName}</span>
+                    <span className="font-bold text-slate-900 text-sm">{authProfile?.name || user?.displayName || localProfile?.name || "Creador de Estudio"}</span>
                     {isAdmin ? (
                       <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-bold rounded-full border border-purple-200 flex items-center gap-1">
                         <Shield className="w-3 h-3" /> Admin
@@ -1018,7 +943,7 @@ export function UserProfileModal({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{authProfile?.email || user.email}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{authProfile?.email || user?.email || "Sesión Local de Estudio"}</p>
                 </div>
                 <div className="text-right text-xs">
                   <span className="text-slate-400 block text-[10px] uppercase font-mono">Episodios</span>
@@ -1039,6 +964,9 @@ export function UserProfileModal({
                   <p>Tu solicitud de acceso ha sido rechazada.</p>
                 </div>
               )}
+
+              {/* Theme Preference Selector (Always available in User Profile) */}
+              {renderThemePreferenceSelector()}
 
               {/* Preferences Form */}
               {localProfile && !isPending && !isRejected && (

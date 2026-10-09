@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database, Sparkles, Home, BarChart3 } from "lucide-react";
+import { Radio, Layers, Search, FileText, Mic, BookOpen, History, User, HelpCircle, Sun, Moon, Globe, WifiOff, Database, Sparkles, Home, BarChart3, Bell } from "lucide-react";
 import { UserProfile } from "./UserProfileModal";
 import { useAuth } from "../app/AuthProvider";
 import { GeminiStatusBadge } from "./GeminiStatusBadge";
@@ -29,6 +29,7 @@ interface HeaderProps {
   isFirestoreConnected?: boolean;
   onOpenSnapshotRestore?: () => void;
   onOpenDiagnostic?: () => void;
+  onOpenNotifications?: () => void;
 }
 
 export function Header({
@@ -51,6 +52,7 @@ export function Header({
   isFirestoreConnected = true,
   onOpenSnapshotRestore,
   onOpenDiagnostic,
+  onOpenNotifications,
 }: HeaderProps) {
   const { user, profile: userProfile } = useAuth();
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -115,6 +117,19 @@ export function Header({
                 <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Nube OK</span>
               )}
             </div>
+
+            {onOpenNotifications && (
+              <button
+                type="button"
+                onClick={onOpenNotifications}
+                title="Notificaciones Push de Renderizado (FCM)"
+                aria-label="Abrir Notificaciones Push"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer relative"
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+              </button>
+            )}
 
             <button
               onClick={onOpenProfile}

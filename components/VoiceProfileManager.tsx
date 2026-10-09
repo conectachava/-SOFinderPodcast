@@ -37,15 +37,15 @@ export function VoiceProfileManager() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSavedInFirestore, setIsSavedInFirestore] = useState<boolean>(false);
 
-  // Load profiles from local storage on mount
+  // Load profiles from local storage on mount and when VoiceClone applies a profile
   useEffect(() => {
-    async function loadVoiceProfiles() {
+    function loadVoiceProfiles() {
       setIsLoading(true);
       try {
         const saved = localStorage.getItem("sf_voice_profiles_config");
         if (saved) {
-           setProfiles(JSON.parse(saved));
-           setIsSavedInFirestore(true);
+          setProfiles(JSON.parse(saved));
+          setIsSavedInFirestore(true);
         }
       } catch (err) {
         console.warn("Notice: Voice profiles loaded from local defaults:", err);
@@ -55,6 +55,8 @@ export function VoiceProfileManager() {
     }
 
     loadVoiceProfiles();
+    window.addEventListener("sf_apply_cloned_voice", loadVoiceProfiles);
+    return () => window.removeEventListener("sf_apply_cloned_voice", loadVoiceProfiles);
   }, []);
 
   const handleProfileChange = (field: keyof VoiceProfileConfig, value: any) => {

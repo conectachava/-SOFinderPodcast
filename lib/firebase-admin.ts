@@ -1,13 +1,15 @@
 import { initializeApp, getApps, getApp, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
-let rawFirebaseConfig: Record<string, any> = {};
+import firebaseConfig from '../firebase-applet-config.json';
+
+const rawFirebaseConfig: Record<string, any> = firebaseConfig || {};
 
 const projectId = (
   process.env.FIREBASE_PROJECT_ID ||
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
   rawFirebaseConfig.projectId ||
-  'vsnry-labs-b4d4f'
+  'google-mpf-fbe01rgpl0il'
 ).trim();
 
 const databaseId =
@@ -30,21 +32,37 @@ export function getAdminApp(): App {
   }
 
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
-  const privateKey = formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+  const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+  const privateKey = formatPrivateKey(rawPrivateKey);
 
   let serviceAccountKeyObj: any = null;
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    try {
-      serviceAccountKeyObj = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-      if (serviceAccountKeyObj.private_key) {
-        serviceAccountKeyObj.private_key = formatPrivateKey(serviceAccountKeyObj.private_key);
+    const rawVal = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+    // Only attempt JSON.parse if it looks like a JSON object
+    if (rawVal.startsWith('{') && rawVal.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(rawVal);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          serviceAccountKeyObj = parsed;
+          if (serviceAccountKeyObj.private_key) {
+            serviceAccountKeyObj.private_key = formatPrivateKey(serviceAccountKeyObj.private_key);
+          }
+        }
+      } catch (e) {
+        console.warn('[Firebase Admin] Error parsing FIREBASE_SERVICE_ACCOUNT_KEY JSON:', e);
       }
-    } catch (e) {
-      console.warn('[Firebase Admin] Error parsing FIREBASE_SERVICE_ACCOUNT_KEY:', e);
     }
   }
 
-  if (serviceAccountKeyObj) {
+  // Validate that serviceAccountKeyObj is a complete service account object before passing to cert()
+  // Never pass raw strings or incomplete objects to cert() to prevent ENOENT file errors
+  if (
+    serviceAccountKeyObj &&
+    typeof serviceAccountKeyObj === 'object' &&
+    typeof serviceAccountKeyObj.client_email === 'string' &&
+    typeof serviceAccountKeyObj.private_key === 'string' &&
+    serviceAccountKeyObj.private_key.includes('BEGIN PRIVATE KEY')
+  ) {
     try {
       return initializeApp({
         credential: cert(serviceAccountKeyObj),
@@ -72,6 +90,7 @@ export function getAdminApp(): App {
     }
   }
 
+  // Default initialization using application default credentials or projectId
   return initializeApp({
     projectId,
     storageBucket: rawFirebaseConfig.storageBucket || undefined,

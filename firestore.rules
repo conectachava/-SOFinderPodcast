@@ -34,26 +34,35 @@ service cloud.firestore {
     // Entity Validations (Pillar 2)
     function isValidUserProfile(data) {
       return data.keys().hasAll(['name', 'email', 'status'])
-        && data.keys().size() <= 15
+        && data.keys().size() <= 18
         && data.name is string && data.name.size() <= 100
         && data.email is string && data.email.size() <= 200
         && data.status in ['pending', 'approved', 'rejected']
         && ( !('preferredFormat' in data) || (data.preferredFormat in ['Debate', 'Análisis', 'Opinión']) )
+        && ( !('themePreference' in data) || (data.themePreference in ['light', 'dark', 'system']) )
         && ( !('customHostVoice' in data) || (data.customHostVoice is string && data.customHostVoice.size() <= 100) )
         && ( !('episodesCount' in data) || (data.episodesCount is number) )
         && ( !('monthlyTokenUsage' in data) || (data.monthlyTokenUsage is number) )
-        && ( !('updatedAt' in data) || data.updatedAt is string );
+        && ( !('fcmToken' in data) || (data.fcmToken is string && data.fcmToken.size() <= 500) )
+        && ( !('notificationsEnabled' in data) || (data.notificationsEnabled is bool) )
+        && ( !('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100) );
     }
 
     function isValidPodcastHistory(data) {
       return data.keys().hasAll(['id', 'title', 'status', 'date'])
-        && data.keys().size() <= 12
+        && data.keys().size() <= 16
         && data.id is string && data.id.size() <= 100
         && data.title is string && data.title.size() <= 200
         && data.status in ['Ready', 'Failed', 'Processing']
         && data.date is string && data.date.size() <= 50
         && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
+        && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 100) )
+        && ( !('format' in data) || (data.format in ['Debate', 'Análisis', 'Opinión']) )
         && ( !('duration' in data) || (data.duration is string && data.duration.size() <= 20) )
+        && ( !('scriptLinesCount' in data) || (data.scriptLinesCount is number) )
+        && ( !('reportSnippet' in data) || (data.reportSnippet is string && data.reportSnippet.size() <= 5000) )
+        && ( !('reportText' in data) || (data.reportText is string && data.reportText.size() <= 100000) )
+        && ( !('rawScript' in data) || (data.rawScript is string && data.rawScript.size() <= 100000) )
         && ( !('sourceUrls' in data) || (data.sourceUrls is list && data.sourceUrls.size() <= 100) )
         && ( !('tags' in data) || (data.tags is list && data.tags.size() <= 10) );
     }
@@ -66,7 +75,7 @@ service cloud.firestore {
         && data.pitch is number
         && data.speed is number
         && data.warmth is number
-        && data.updatedAt is string;
+        && data.updatedAt is string && data.updatedAt.size() <= 100;
     }
 
     function isValidDraft(data) {
@@ -76,13 +85,55 @@ service cloud.firestore {
         && ( !('scriptText' in data) || (data.scriptText is string && data.scriptText.size() <= 100000) )
         && ( !('reportText' in data) || (data.reportText is string && data.reportText.size() <= 100000) )
         && ( !('rawScript' in data) || (data.rawScript is string && data.rawScript.size() <= 100000) )
-        && ( !('updatedAt' in data) || data.updatedAt is string );
+        && ( !('scriptLines' in data) || (data.scriptLines is list && data.scriptLines.size() <= 500) )
+        && ( !('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100) );
+    }
+
+    function isValidPublicPodcast(data) {
+      return data.keys().hasAll(['id', 'title', 'status', 'date'])
+        && data.keys().size() <= 20
+        && data.id is string && data.id.size() <= 100
+        && data.title is string && data.title.size() <= 200
+        && data.status in ['Ready', 'Failed', 'Processing']
+        && data.date is string && data.date.size() <= 50
+        && ( !('topic' in data) || (data.topic is string && data.topic.size() <= 500) )
+        && ( !('description' in data) || (data.description is string && data.description.size() <= 5000) )
+        && ( !('contentType' in data) || (data.contentType is string && data.contentType.size() <= 100) )
+        && ( !('format' in data) || (data.format in ['Debate', 'Análisis', 'Opinión']) )
+        && ( !('duration' in data) || (data.duration is string && data.duration.size() <= 20) )
+        && ( !('coverArt' in data) || (data.coverArt is string && data.coverArt.size() <= 500000) )
+        && ( !('audioUrl' in data) || (data.audioUrl is string && data.audioUrl.size() <= 500000) )
+        && ( !('scriptLinesCount' in data) || (data.scriptLinesCount is number) )
+        && ( !('userId' in data) || (data.userId is string && data.userId.size() <= 128) )
+        && ( !('authorName' in data) || (data.authorName is string && data.authorName.size() <= 100) )
+        && ( !('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100) )
+        && ( !('tags' in data) || (data.tags is list && data.tags.size() <= 10) );
+    }
+
+    function isValidFcmTokenRecord(data) {
+      return data.keys().hasAll(['token', 'updatedAt'])
+        && data.keys().size() <= 6
+        && data.token is string && data.token.size() <= 500
+        && ( !('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 500) )
+        && ( !('enabled' in data) || (data.enabled is bool) )
+        && data.updatedAt is string && data.updatedAt.size() <= 100;
     }
 
     // Rules Definitions (Pillar 3-8)
     
     match /admins/{userId} {
       allow read: if isSignedIn();
+    }
+
+    match /podcasts/{podcastId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && isValidId(podcastId) && isValidPublicPodcast(incoming())
+                    && incoming().userId == request.auth.uid;
+      allow update: if isValidId(podcastId) && isValidPublicPodcast(incoming()) && (
+        (isSignedIn() && incoming().userId == request.auth.uid && existing().userId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow delete: if (isSignedIn() && existing().userId == request.auth.uid) || isAdmin();
     }
 
     match /users/{userId} {
@@ -96,7 +147,7 @@ service cloud.firestore {
                     
       allow update: if isValidId(userId) && isValidUserProfile(incoming()) && (
         // Pillar 4: Tiered Identity Logic
-        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'customHostVoice', 'episodesCount', 'monthlyTokenUsage', 'updatedAt', 'contentFilters']) 
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'preferredFormat', 'themePreference', 'customHostVoice', 'episodesCount', 'monthlyTokenUsage', 'updatedAt', 'contentFilters', 'fcmToken', 'notificationsEnabled']) 
          && incoming().status == existing().status) ||
         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
       );
@@ -115,13 +166,19 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      match /fcmTokens/{tokenId} {
+        allow read, list: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isValidId(tokenId) && isValidFcmTokenRecord(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
       match /history/{historyId} {
         allow read, list: if isOwner(userId) || isAdmin();
         // Pillar 11: Global Consistency Invariant
         allow create: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming());
         // Pillar 4 Action-Based Updates
         allow update: if isOwner(userId) && isValidId(historyId) && isValidPodcastHistory(incoming()) 
-                      && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'duration', 'sourceUrls', 'topic', 'tags']);
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'duration', 'sourceUrls', 'topic', 'contentType', 'format', 'scriptLinesCount', 'reportSnippet', 'reportText', 'rawScript', 'tags']);
         allow delete: if isOwner(userId) || isAdmin();
       }
     }

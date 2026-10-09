@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface SyncGuardProps {
@@ -73,13 +73,13 @@ export function useAppSyncGuard({
                 await setDoc(draftRef, {
                     reportText: reportText || "",
                     rawScript: rawScript || "",
-                    updatedAt: serverTimestamp()
+                    updatedAt: new Date().toISOString()
                 }, { merge: true });
                 discrepancyCounter.current = 0;
             }
           }
-        } catch (error) {
-          console.warn("AppSyncGuard failed to recover:", error);
+        } catch {
+          // Ignore transient sync recovery errors
         }
       }
     }, 2000);

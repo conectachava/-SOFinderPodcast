@@ -26,6 +26,7 @@ import {
   Share2,
   Hash,
   PauseCircle,
+  Bell,
 } from "lucide-react";
 import { safeFetchJson } from "@/lib/utils";
 import type { ScriptLine } from "@/app/api/script-writer/route";
@@ -35,6 +36,30 @@ import { ScriptSentimentPanel } from "./ScriptSentimentPanel";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import { NarrativeArcChart } from "./NarrativeArcChart";
 import { VoiceProfileManager } from "./VoiceProfileManager";
+import { RealtimeAudioWaveform } from "./RealtimeAudioWaveform";
+import { PodcastSocialShareModal } from "./PodcastSocialShareModal";
+import { ImagenCoverStudio } from "./ImagenCoverStudio";
+import { PushNotificationManager } from "./PushNotificationManager";
+import { dispatchRenderingPushAlert } from "@/lib/fcm";
+import { savePublicPodcast } from "@/lib/podcasts-repository";
+import {
+  VoiceClone,
+  loadStoredClonedVoices,
+  type ClonedVoiceProfile,
+} from "./VoiceClone";
+import {
+  ProVoiceSettingsPanel,
+  buildDefaultProVoiceSetting,
+  buildSynthesizablePromptForLine,
+  type ProVoiceLineSetting,
+} from "./ProVoiceSettingsPanel";
+import { AudioBed } from "./AudioBed";
+import {
+  analyzeAndNormalizeVoiceTracks,
+  blendVoiceAndAudioBedSamples,
+  dbToLinear,
+  type VoiceTrackLoudnessMetrics,
+} from "@/lib/audio-bed-dsp";
 
 export const SPEECH_LOCUTION_STYLES = [
   {
@@ -89,7 +114,12 @@ export const AMBIENT_MUSIC_TRACKS = [
   { id: "cinematic_space", label: "🌌 Cinematic Space", desc: "Atmósfera espacial envolvente" },
 ];
 
-function decodePcmBase64ToBuffer(audioContext: AudioContext, base64Data: string, sampleRate = 24000): AudioBuffer {
+function decodePcmBase64ToBuffer(
+  audioContext: AudioContext,
+  base64Data: string,
+  sampleRate = 24000,
+  options?: { speed?: number; pitchSemitones?: number; emphasisIntensity?: number }
+): AudioBuffer {
   const binaryString = window.atob(base64Data);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
@@ -97,9 +127,19 @@ function decodePcmBase64ToBuffer(audioContext: AudioContext, base64Data: string,
     bytes[i] = binaryString.charCodeAt(i);
   }
   const int16Array = new Int16Array(bytes.buffer);
-  const float32Array = new Float32Array(int16Array.length);
-  for (let i = 0; i < int16Array.length; i++) {
-    float32Array[i] = int16Array[i] / 32768.0;
+  const speed = options?.speed ?? 1.0;
+  const pitchSemitones = options?.pitchSemitones ?? 0;
+  const emphasisIntensity = options?.emphasisIntensity ?? 50;
+
+  const effectiveRate = Math.max(0.5, Math.min(2.0, speed * Math.pow(2, pitchSemitones / 24)));
+  const outputLength = Math.max(1, Math.floor(int16Array.length / effectiveRate));
+  const gainMultiplier = 0.85 + (emphasisIntensity / 100) * 0.3;
+
+  const float32Array = new Float32Array(outputLength);
+  for (let i = 0; i < outputLength; i++) {
+    const srcIdx = Math.min(int16Array.length - 1, Math.floor(i * effectiveRate));
+    const sample = (int16Array[srcIdx] / 32768.0) * gainMultiplier;
+    float32Array[i] = Math.max(-1, Math.min(1, sample));
   }
   const buffer = audioContext.createBuffer(1, float32Array.length, sampleRate);
   buffer.getChannelData(0).set(float32Array);
@@ -198,6 +238,14 @@ export function PodcastStudioView({
   }
 
   const [isGeneratingCover, setIsGeneratingCover] = useState<boolean>(false);
+  const [isCoverStudioExpanded, setIsCoverStudioExpanded] = useState<boolean>(true);
+  const [isVoiceCloneModalOpen, setIsVoiceCloneModalOpen] = useState<boolean>(false);
+  const [isPushNotificationModalOpen, setIsPushNotificationModalOpen] = useState<boolean>(false);
+  const [podcastEpisodeId] = useState<string>("ep-studio-active");
+  const [clonedVoices, setClonedVoices] = useState<ClonedVoiceProfile[]>(() =>
+    loadStoredClonedVoices()
+  );
+  const [speakerAssignedCloneId, setSpeakerAssignedCloneId] = useState<Record<string, string>>({});
 
   // Calculate estimated podcast duration based on total script word count (~150 wpm rate)
   const { totalWords, estimatedDurationFormatted, estimatedMinutesSeconds } = React.useMemo(() => {
@@ -252,6 +300,90 @@ export function PodcastStudioView({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   // Individual line speed pacing map (0.5x to 2.0x per line)
   const [lineSpeeds, setLineSpeeds] = useState<Record<string, number>>({});
+  // Granular Pro Voice Settings per dialogue line (pitch, speed, emotional emphasis)
+  const [proVoiceSettings, setProVoiceSettings] = useState<Record<string, ProVoiceLineSetting>>(
+    () => {
+      const initialMap: Record<string, ProVoiceLineSetting> = {};
+      (initialLines || []).forEach((l) => {
+        initialMap[l.id] = buildDefaultProVoiceSetting(l);
+      });
+      return initialMap;
+    }
+  );
+  const proVoicePanelRef = useRef<HTMLDivElement | null>(null);
+
+  const handleUpdateProLineSetting = (
+    lineId: string,
+    patch: Partial<ProVoiceLineSetting>
+  ) => {
+    setProVoiceSettings((prev) => {
+      const targetLine = lines.find((l) => l.id === lineId);
+      const current =
+        prev[lineId] ||
+        (targetLine
+          ? buildDefaultProVoiceSetting(targetLine)
+          : {
+              lineId,
+              pitch: 0,
+              speed: 1.0,
+              emotion: "neutral" as const,
+              emphasisIntensity: 50,
+              prosodyInflection: "natural" as const,
+            });
+      return {
+        ...prev,
+        [lineId]: { ...current, ...patch },
+      };
+    });
+
+    if (typeof patch.speed === "number") {
+      setLineSpeeds((prev) => ({ ...prev, [lineId]: patch.speed! }));
+    }
+
+    if (patch.emotion) {
+      const mappedSentiment =
+        patch.emotion === "enthusiastic" || patch.emotion === "persuasive"
+          ? "enthusiastic"
+          : patch.emotion === "concerned" || patch.emotion === "dramatic"
+          ? "concerned"
+          : patch.emotion === "thoughtful"
+          ? "thoughtful"
+          : "neutral";
+      setLines((prev) =>
+        prev.map((l) =>
+          l.id === lineId ? { ...l, sentiment: mappedSentiment, emotion: patch.emotion } : l
+        )
+      );
+    }
+  };
+
+  const handleBulkUpdateProSettings = (nextMap: Record<string, ProVoiceLineSetting>) => {
+    setProVoiceSettings(nextMap);
+    const nextSpeeds: Record<string, number> = {};
+    Object.values(nextMap).forEach((s) => {
+      nextSpeeds[s.lineId] = s.speed;
+    });
+    setLineSpeeds(nextSpeeds);
+    setLines((prev) =>
+      prev.map((l) => {
+        const s = nextMap[l.id];
+        if (!s) return l;
+        const mappedSentiment =
+          s.emotion === "enthusiastic" || s.emotion === "persuasive"
+            ? "enthusiastic"
+            : s.emotion === "concerned" || s.emotion === "dramatic"
+            ? "concerned"
+            : s.emotion === "thoughtful"
+            ? "thoughtful"
+            : "neutral";
+        return { ...l, sentiment: mappedSentiment, emotion: s.emotion };
+      })
+    );
+  };
+
+  const handleUpdateLineText = (lineId: string, newText: string) => {
+    setLines((prev) => prev.map((l) => (l.id === lineId ? { ...l, text: newText } : l)));
+  };
   const [volume, setVolume] = useState<number>(0.9);
   const [musicDucking, setMusicDucking] = useState<number>(0.15); // background ambient level
   const [geminiAudioLoading, setGeminiAudioLoading] = useState<boolean>(false);
@@ -284,9 +416,28 @@ export function PodcastStudioView({
     );
   };
 
-  // Ambient Music Selection State
+  // Ambient Music Selection & Audio Bed State
   const [selectedAmbientTrack, setSelectedAmbientTrack] = useState<string>("ambient_lounge");
-  const [ambientVolume, setAmbientVolume] = useState<number>(0.15);
+  const [ambientVolume, setAmbientVolume] = useState<number>(0.18);
+  const [autoDucking, setAutoDucking] = useState<boolean>(true);
+  const [duckingAmountDb, setDuckingAmountDb] = useState<number>(-12);
+  const [fadeInSeconds, setFadeInSeconds] = useState<number>(1.2);
+  const [fadeOutSeconds, setFadeOutSeconds] = useState<number>(2.0);
+  const [customBedSamples, setCustomBedSamples] = useState<Float32Array | null>(null);
+  const [customTrackMeta, setCustomTrackMeta] = useState<{
+    name: string;
+    durationSec: number;
+    sampleRate: number;
+    sizeKb: number;
+  } | null>(null);
+
+  // Automatic Multi-Voice Loudness Detection & Normalization State
+  const [autoNormalizeVoices, setAutoNormalizeVoices] = useState<boolean>(true);
+  const [targetLufs, setTargetLufs] = useState<number>(-16);
+  const [speakerTrimDb, setSpeakerTrimDb] = useState<Record<string, number>>({});
+  const [speakerNormalizedGainsDb, setSpeakerNormalizedGainsDb] = useState<Record<string, number>>({});
+  const [realTrackMetrics, setRealTrackMetrics] = useState<VoiceTrackLoudnessMetrics[]>([]);
+  const audioBedSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Smart Pause Feature State (Feature 4)
   const [smartPauseEnabled, setSmartPauseEnabled] = useState<boolean>(true);
@@ -307,6 +458,7 @@ export function PodcastStudioView({
   } | null>(null);
   const [isGeneratingMetadata, setIsGeneratingMetadata] = useState<boolean>(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isSocialShareModalOpen, setIsSocialShareModalOpen] = useState<boolean>(false);
 
   const handleGenerateMetadata = async () => {
     setIsGeneratingMetadata(true);
@@ -381,6 +533,13 @@ export function PodcastStudioView({
       "info"
     );
 
+    dispatchRenderingPushAlert({
+      title: "🎙️ Renderizado Iniciado",
+      body: `Procesando síntesis de ${lines.length} intervenciones de voz para "${topic}"...`,
+      status: "rendering",
+      podcastId: podcastEpisodeId,
+    });
+
     try {
       const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioCtxClass({ sampleRate: 24000 });
@@ -395,23 +554,37 @@ export function PodcastStudioView({
           `Línea ${i + 1}/${lines.length} [${line.speaker}]: "${line.text.slice(0, 32)}..."`
         );
 
+        const assignedCloneId = speakerAssignedCloneId[line.speaker];
+        const assignedClone = clonedVoices.find((cv) => cv.id === assignedCloneId);
         const voiceName =
+          assignedClone?.baseAiVoice ||
           (line as any).voiceName ||
           (line.speakerRole === "host" ? "Zephyr" : line.gender === "Female" ? "Kore" : "Fenrir");
+
+        const proSetting = proVoiceSettings[line.id] || buildDefaultProVoiceSetting(line);
+        const directedText = buildSynthesizablePromptForLine(line.text, proSetting);
 
         const res = await safeFetchJson("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            text: line.text,
+            text: directedText,
             voiceName,
+            pitch: proSetting.pitch,
+            speed: proSetting.speed,
+            emotion: proSetting.emotion,
+            emphasisIntensity: proSetting.emphasisIntensity,
           }),
         });
 
         if (res.ok && res.data?.audioBase64) {
           const { audioBase64 } = res.data;
           try {
-            const buf = decodePcmBase64ToBuffer(audioCtx, audioBase64, 24000);
+            const buf = decodePcmBase64ToBuffer(audioCtx, audioBase64, 24000, {
+              speed: proSetting.speed,
+              pitchSemitones: proSetting.pitch + (speakerPitches[line.speaker] ?? 0),
+              emphasisIntensity: proSetting.emphasisIntensity,
+            });
             decodedBuffers.push(buf);
           } catch (decodeErr) {
             console.warn("No se pudo decodificar el fragmento PCM, omitiendo línea", decodeErr);
@@ -425,13 +598,37 @@ export function PodcastStudioView({
         throw new Error("No se pudo sintetizar ningún fragmento de audio válido.");
       }
 
+      // Automatic Multi-Voice Volume Detection & Normalization across all decoded tracks
+      let normalizedChannelTracks: Float32Array[] = decodedBuffers.map((b) =>
+        new Float32Array(b.getChannelData(0))
+      );
+
+      if (autoNormalizeVoices) {
+        setBatchStatusText(
+          `Detectando sonoridad LUFS y normalizando volumen entre ${decodedBuffers.length} pistas de voz (${targetLufs} LUFS)...`
+        );
+        const trackInputs = normalizedChannelTracks.map((samples, idx) => {
+          const spk = lines[idx]?.speaker || "Locutor";
+          return {
+            trackId: lines[idx]?.id || `line-${idx}`,
+            speaker: spk,
+            samples,
+            manualTrimDb: speakerTrimDb[spk] ?? 0,
+          };
+        });
+
+        const normBatch = analyzeAndNormalizeVoiceTracks(trackInputs, targetLufs, -1.0);
+        normalizedChannelTracks = normBatch.results.map((r) => r.normalizedSamples);
+        setRealTrackMetrics(normBatch.results.map((r) => r.metrics));
+      }
+
       setBatchStatusText("Ensamblando pista maestra de voz e insertando Pausas Inteligentes según emoción...");
 
       // Calculate dynamic Smart Pause samples per line based on emotion/sentiment
       let totalPauseSamples = 0;
       const pauseSamplesPerLine: number[] = [];
 
-      for (let i = 0; i < decodedBuffers.length; i++) {
+      for (let i = 0; i < normalizedChannelTracks.length; i++) {
         let pMs = 300;
         if (smartPauseEnabled) {
           const lineSentiment = (lines[i]?.sentiment || "neutral").toLowerCase();
@@ -450,28 +647,74 @@ export function PodcastStudioView({
         totalPauseSamples += pSamples;
       }
 
-      let totalSamples = decodedBuffers.reduce((acc, b) => acc + b.length, 0) + totalPauseSamples;
+      const totalSamples =
+        normalizedChannelTracks.reduce((acc, b) => acc + b.length, 0) + totalPauseSamples;
 
-      const combinedBuffer = audioCtx.createBuffer(1, totalSamples, 24000);
-      const channelData = combinedBuffer.getChannelData(0);
-
+      const voiceMasterSamples = new Float32Array(totalSamples);
       let offset = 0;
-      decodedBuffers.forEach((buf, i) => {
-        channelData.set(buf.getChannelData(0), offset);
+      normalizedChannelTracks.forEach((samples, i) => {
+        voiceMasterSamples.set(samples, offset);
         const pSamples = pauseSamplesPerLine[i] || 6000;
-        offset += buf.length + pSamples;
+        offset += samples.length + pSamples;
       });
+
+      // Blend Master Voice Track with Selected Royalty-Free or Custom Audio Bed + Auto-Ducking
+      setBatchStatusText("Mezclando Audio Bed de fondo con atenuación inteligente (Auto-Ducking)...");
+      const finalBlendedSamples = blendVoiceAndAudioBedSamples(voiceMasterSamples, 24000, {
+        trackId: selectedAmbientTrack,
+        bedVolume: ambientVolume,
+        autoDucking,
+        duckingAmountDb,
+        fadeInSeconds,
+        fadeOutSeconds,
+        customBedSamples,
+      });
+
+      const combinedBuffer = audioCtx.createBuffer(1, finalBlendedSamples.length, 24000);
+      combinedBuffer.getChannelData(0).set(finalBlendedSamples);
 
       const wavBlob = bufferToWavBlob(combinedBuffer);
       const url = URL.createObjectURL(wavBlob);
       setBatchAudioObjectUrl(url);
 
+      const publicEpisode = {
+        id: podcastEpisodeId,
+        title: topic,
+        topic,
+        description:
+          metadataResult?.description ||
+          `Episodio masterizado de ${lines.length} líneas sobre "${topic}" investigado y generado con Gemini AI.`,
+        contentType: "Análisis Multivoz",
+        format: "Análisis" as const,
+        status: "Ready" as const,
+        duration: estimatedMinutesSeconds || "12:00",
+        date: new Date().toISOString().slice(0, 10),
+        coverArt: coverArt || undefined,
+        audioUrl: url,
+        scriptLinesCount: lines.length,
+        tags: ["Podcast", "SourceFinder", "GeminiAI", "TTS"],
+      };
+      savePublicPodcast(publicEpisode);
+
+      dispatchRenderingPushAlert({
+        title: "🎉 ¡Podcast Finalizado!",
+        body: `El episodio "${topic}" ha sido masterizado a ${targetLufs} LUFS con Audio Bed ambiental.`,
+        status: "completed",
+        podcastId: podcastEpisodeId,
+      });
+
       addToast(
         "Producción Completa",
-        `Episodio maestro de ${lines.length} líneas sintetizado con Pausas Inteligentes por emoción.`,
+        `Episodio maestro de ${lines.length} líneas normalizado (${targetLufs} LUFS) y mezclado con Audio Bed.`,
         "success"
       );
     } catch (err: any) {
+      dispatchRenderingPushAlert({
+        title: "❌ Error de Renderizado",
+        body: err?.message || "Falló la producción por lote.",
+        status: "failed",
+        podcastId: podcastEpisodeId,
+      });
       addToast("Error en Síntesis por Lote", err?.message || "Falló la producción por lote.", "error");
     } finally {
       setIsBatchProcessingTTS(false);
@@ -594,6 +837,86 @@ export function PodcastStudioView({
   const [isVoiceGalleryOpen, setIsVoiceGalleryOpen] = useState<boolean>(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  // Listen to VoiceClone updates from UserProfileModal or inline modal
+  useEffect(() => {
+    const handleProfilesUpdated = () => {
+      setClonedVoices(loadStoredClonedVoices());
+    };
+
+    const handleApplyClonedVoice = (e: Event) => {
+      const evt = e as CustomEvent<{ profile?: ClonedVoiceProfile }>;
+      const profile = evt.detail?.profile;
+      setClonedVoices(loadStoredClonedVoices());
+      if (!profile) return;
+
+      // Match speaker by role in current lines
+      const targetLine = lines.find((l) =>
+        profile.studioRole === "Host"
+          ? l.speakerRole === "host"
+          : l.speakerRole !== "host"
+      );
+      const targetSpeaker = targetLine?.speaker || lines[0]?.speaker;
+      if (targetSpeaker) {
+        setSpeakerAssignedCloneId((prev) => ({ ...prev, [targetSpeaker]: profile.id }));
+        setSpeakerPitches((prev) => ({
+          ...prev,
+          [targetSpeaker]: Math.max(-4, Math.min(4, profile.pitchShift || 0)),
+        }));
+        setSpeakerSpeeds((prev) => ({
+          ...prev,
+          [targetSpeaker]: profile.speed || 1.0,
+        }));
+      }
+    };
+
+    window.addEventListener("sf_voice_profiles_updated", handleProfilesUpdated);
+    window.addEventListener("sf_apply_cloned_voice", handleApplyClonedVoice);
+    return () => {
+      window.removeEventListener("sf_voice_profiles_updated", handleProfilesUpdated);
+      window.removeEventListener("sf_apply_cloned_voice", handleApplyClonedVoice);
+    };
+  }, [lines]);
+
+  const handleAssignCloneToSpeaker = (speakerName: string, cloneId: string) => {
+    if (!cloneId) {
+      setSpeakerAssignedCloneId((prev) => {
+        const copy = { ...prev };
+        delete copy[speakerName];
+        return copy;
+      });
+      return;
+    }
+
+    const found = clonedVoices.find((c) => c.id === cloneId);
+    if (!found) return;
+
+    setSpeakerAssignedCloneId((prev) => ({ ...prev, [speakerName]: found.id }));
+    setSpeakerPitches((prev) => ({
+      ...prev,
+      [speakerName]: Math.max(-4, Math.min(4, found.pitchShift || 0)),
+    }));
+    setSpeakerSpeeds((prev) => ({
+      ...prev,
+      [speakerName]: found.speed || 1.0,
+    }));
+    setLines((prev) =>
+      prev.map((l) =>
+        l.speaker === speakerName
+          ? {
+              ...l,
+              accent: found.accent,
+              ...( { voiceName: found.baseAiVoice } as any ),
+            }
+          : l
+      )
+    );
+    addToast(
+      "Voice Clone Asignado",
+      `Se asignó el clon IA "${found.speakerName}" (${found.baseAiVoice}) al locutor ${speakerName}.`,
+      "success"
+    );
+  };
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameId = useRef<number | null>(null);
   const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
@@ -630,10 +953,27 @@ export function PodcastStudioView({
 
     window.speechSynthesis.cancel();
 
-    const lineSpeed = lineSpeeds[currentLine.id] ?? 1.0;
+    const proSetting =
+      proVoiceSettings[currentLine.id] || buildDefaultProVoiceSetting(currentLine);
+    const lineSpeed = lineSpeeds[currentLine.id] ?? proSetting.speed ?? 1.0;
+    const speakerPitchOffset = speakerPitches[currentLine.speaker] ?? 0;
+    const totalPitchSemitones = proSetting.pitch + speakerPitchOffset;
+
     const utterance = new SpeechSynthesisUtterance(currentLine.text);
     utterance.rate = Math.max(0.1, Math.min(10, playbackSpeed * lineSpeed * 1.05));
-    utterance.volume = volume;
+    utterance.pitch = Math.max(0.5, Math.min(1.6, 1.0 + totalPitchSemitones * 0.08));
+    const normGainDb = autoNormalizeVoices
+      ? (speakerNormalizedGainsDb[currentLine.speaker] ?? 0) +
+        (speakerTrimDb[currentLine.speaker] ?? 0)
+      : speakerTrimDb[currentLine.speaker] ?? 0;
+    const normMultiplier = Math.max(0.5, Math.min(1.35, dbToLinear(normGainDb * 0.35)));
+    utterance.volume = Math.max(
+      0.1,
+      Math.min(
+        1.0,
+        volume * (0.7 + (proSetting.emphasisIntensity / 100) * 0.3) * normMultiplier
+      )
+    );
 
     // Pick voice based on speaker gender / role
     const voices = window.speechSynthesis.getVoices();
@@ -674,7 +1014,19 @@ export function PodcastStudioView({
     return () => {
       window.speechSynthesis.cancel();
     };
-  }, [isPlaying, activeLineIdx, lines, playbackSpeed, volume, lineSpeeds]);
+  }, [
+    isPlaying,
+    activeLineIdx,
+    lines,
+    playbackSpeed,
+    volume,
+    lineSpeeds,
+    proVoiceSettings,
+    speakerPitches,
+    autoNormalizeVoices,
+    speakerNormalizedGainsDb,
+    speakerTrimDb,
+  ]);
 
   // Audio Waveform Canvas Animation
   useEffect(() => {
@@ -841,7 +1193,12 @@ export function PodcastStudioView({
     addToast("Gemini TTS HD", "Sintetizando pista de audio en la nube con Gemini Voice...", "info");
 
     try {
-      const fullText = lines.map((l) => `${l.speaker}: ${l.text}`).join("\n");
+      const fullText = lines
+        .map((l) => {
+          const proSetting = proVoiceSettings[l.id] || buildDefaultProVoiceSetting(l);
+          return `${l.speaker}: ${buildSynthesizablePromptForLine(l.text, proSetting)}`;
+        })
+        .join("\n");
       const response = await safeFetchJson("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -859,6 +1216,12 @@ export function PodcastStudioView({
       if (data.audioBase64) {
         setGeminiAudioUrl(`data:${data.mimeType};base64,${data.audioBase64}`);
         addToast("Audio Listo", "Audio Gemini TTS generado exitosamente.", "success");
+        dispatchRenderingPushAlert({
+          title: "✨ Audio Gemini TTS Listo",
+          body: `Pista de voz HD generada para "${topic}".`,
+          status: "completed",
+          podcastId: podcastEpisodeId,
+        });
       }
     } catch (err: any) {
       if (err?.name === "AbortError" || String(err?.message || "").toLowerCase().includes("abort")) {
@@ -907,11 +1270,10 @@ export function PodcastStudioView({
             {/* Thematic Cover Art Display */}
             <div className="relative group shrink-0">
               {coverArt ? (
-                <Image
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
                   src={coverArt}
                   alt={`Portada de ${topic}`}
-                  width={96}
-                  height={96}
                   referrerPolicy="no-referrer"
                   className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover border border-slate-700 shadow-md group-hover:opacity-90 transition-opacity"
                 />
@@ -926,15 +1288,15 @@ export function PodcastStudioView({
                 type="button"
                 onClick={handleGenerateCoverArt}
                 disabled={isGeneratingCover}
-                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-[11px] font-bold gap-1 p-1 text-center"
-                title="Generar o regenerar portada temática con Gemini IA"
+                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-[11px] font-bold gap-1 p-1 text-center cursor-pointer"
+                title="Generar o regenerar portada temática con Imagen IA"
               >
                 {isGeneratingCover ? (
                   <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>IA Portada</span>
+                    <span>Imagen IA</span>
                   </>
                 )}
               </button>
@@ -968,16 +1330,63 @@ export function PodcastStudioView({
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               type="button"
+              onClick={() => setIsPushNotificationModalOpen(true)}
+              className="px-3 py-2 bg-indigo-950 hover:bg-indigo-900 text-indigo-200 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer border border-indigo-800"
+              title="Configurar Notificaciones Push de Renderizado (FCM)"
+            >
+              <Bell className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Notificaciones FCM</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                audioBedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              title="Ir a Audio Bed & Normalizador Automático de Volumen"
+            >
+              <Music className="w-3.5 h-3.5" />
+              <span>Audio Bed &amp; Normalizador</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                proVoicePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              title="Ir al panel de Ajustes de Voz Pro por línea"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Ajustes de Voz Pro</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCoverStudioExpanded((prev) => !prev)}
+              className={`px-3 py-2 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer border ${
+                isCoverStudioExpanded
+                  ? "bg-indigo-600 text-white border-indigo-500"
+                  : "bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border-indigo-800"
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+              <span>{isCoverStudioExpanded ? "Ocultar Estudio Imagen" : "Estudio Carátulas (Imagen)"}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleGenerateCoverArt}
               disabled={isGeneratingCover}
-              className="px-3 py-2 bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border border-indigo-800 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-200 border border-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
               {isGeneratingCover ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
               ) : (
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
               )}
-              <span>{coverArt ? "Regenerar Portada" : "Generar Portada IA"}</span>
+              <span>{coverArt ? "Portada Rápida" : "Generar Portada IA"}</span>
             </button>
 
             <button
@@ -1005,17 +1414,47 @@ export function PodcastStudioView({
                 </>
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSocialShareModalOpen(true)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Compartir en Redes</span>
+            </button>
           </div>
         </div>
 
-        {/* Live Audio Waveform Visualizer & Equalizer Deck */}
-        <AudioWaveformVisualizer
-          isPlaying={isPlaying}
-          samplingSpeaker={samplingSpeaker}
-          isBatchAudioPlaying={isBatchAudioPlaying}
+        {/* Real-time Audio Waveform Visualization of Generated Audio Peaks & Live Playback */}
+        <RealtimeAudioWaveform
+          audioUrl={batchAudioObjectUrl || geminiAudioUrl || null}
+          isPlaying={isPlaying || isBatchAudioPlaying}
+          onTogglePlay={batchAudioObjectUrl ? () => {
+            if (batchAudioRef.current) {
+              if (batchAudioRef.current.paused) {
+                batchAudioRef.current.play();
+                setIsBatchAudioPlaying(true);
+              } else {
+                batchAudioRef.current.pause();
+                setIsBatchAudioPlaying(false);
+              }
+            } else {
+              handleTogglePlay();
+            }
+          } : handleTogglePlay}
           currentSpeaker={currentSpeaker}
+          topic={topic}
           volume={volume}
           playbackSpeed={playbackSpeed}
+          durationSeconds={Math.max(30, lines.length * 12)}
+          activeLineIdx={activeLineIdx}
+          totalLines={lines.length}
+          onSeekTime={(timeSecs) => {
+            if (batchAudioRef.current) {
+              batchAudioRef.current.currentTime = timeSecs;
+            }
+          }}
         />
 
         {/* Playback Controls & Sliders */}
@@ -1087,75 +1526,70 @@ export function PodcastStudioView({
         )}
       </div>
 
-      {/* AMBIENT BACKGROUND TRACK SELECTION CARD */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <Music className="w-4.5 h-4.5 text-emerald-400" />
-            <div>
-              <h4 className="text-sm font-bold text-slate-100">
-                Selección de Música de Fondo (Ambient Track Selection)
-              </h4>
-              <p className="text-xs text-slate-400">
-                Mezcla pistas musicales ambientales en segundo plano para acompañar la locución del podcast
-              </p>
-            </div>
-          </div>
-          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800 font-bold">
-            Pista Activa: {AMBIENT_MUSIC_TRACKS.find((t) => t.id === selectedAmbientTrack)?.label}
-          </span>
-        </div>
+      {/* IMAGEN COVER ART GENERATOR STUDIO */}
+      {isCoverStudioExpanded && (
+        <ImagenCoverStudio
+          topic={topic}
+          scriptLines={lines}
+          currentCoverArt={coverArt}
+          onSelectCoverArt={(url) => setCoverArt(url)}
+        />
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Pista Musical de Fondo
-            </label>
-            <select
-              value={selectedAmbientTrack}
-              onChange={(e) => {
-                setSelectedAmbientTrack(e.target.value);
-                const track = AMBIENT_MUSIC_TRACKS.find((t) => t.id === e.target.value);
-                addToast("Música Ambiental", `Pista seleccionada: ${track?.label || e.target.value}`, "info");
-              }}
-              className="w-full bg-slate-950 text-slate-100 border border-slate-700 text-xs rounded-lg px-3 py-2.5 outline-none focus:border-emerald-500 font-semibold cursor-pointer shadow-2xs"
-            >
-              {AMBIENT_MUSIC_TRACKS.map((track) => (
-                <option key={track.id} value={track.id}>
-                  {track.label}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* AUDIO BED COMPONENT & AUTOMATIC MULTI-VOICE LOUDNESS NORMALIZER */}
+      <div ref={audioBedSectionRef}>
+        <AudioBed
+          lines={lines}
+          selectedTrackId={selectedAmbientTrack}
+          onSelectTrackId={(id) => {
+            setSelectedAmbientTrack(id);
+          }}
+          bedVolume={ambientVolume}
+          onChangeBedVolume={(vol) => {
+            setAmbientVolume(vol);
+            setMusicDucking(vol);
+          }}
+          autoDucking={autoDucking}
+          onChangeAutoDucking={setAutoDucking}
+          duckingAmountDb={duckingAmountDb}
+          onChangeDuckingAmountDb={setDuckingAmountDb}
+          fadeInSeconds={fadeInSeconds}
+          onChangeFadeInSeconds={setFadeInSeconds}
+          fadeOutSeconds={fadeOutSeconds}
+          onChangeFadeOutSeconds={setFadeOutSeconds}
+          customBedSamples={customBedSamples}
+          customTrackMeta={customTrackMeta}
+          onUploadCustomBed={(samples, meta) => {
+            setCustomBedSamples(samples);
+            setCustomTrackMeta(meta);
+          }}
+          autoNormalizeVoices={autoNormalizeVoices}
+          onChangeAutoNormalizeVoices={setAutoNormalizeVoices}
+          targetLufs={targetLufs}
+          onChangeTargetLufs={setTargetLufs}
+          speakerTrimDb={speakerTrimDb}
+          onUpdateSpeakerTrimDb={(speaker, trimDb) =>
+            setSpeakerTrimDb((prev) => ({ ...prev, [speaker]: trimDb }))
+          }
+          speakerNormalizedGainsDb={speakerNormalizedGainsDb}
+          onApplyNormalizedGains={setSpeakerNormalizedGainsDb}
+          realTrackMetrics={realTrackMetrics}
+        />
+      </div>
 
-          <div>
-            <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Volumen de Fondo ({Math.round(ambientVolume * 100)}%)
-            </label>
-            <div className="flex items-center gap-2 pt-2">
-              <VolumeX className="w-4 h-4 text-slate-500 shrink-0" />
-              <input
-                type="range"
-                min="0"
-                max="0.5"
-                step="0.02"
-                value={ambientVolume}
-                onChange={(e) => setAmbientVolume(parseFloat(e.target.value))}
-                className="w-full accent-emerald-500 cursor-pointer"
-              />
-              <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            </div>
-          </div>
-
-          <div className="flex items-center">
-            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 w-full text-xs text-slate-300">
-              <span className="text-[10px] font-mono font-bold text-emerald-400 block uppercase">Descripción de la Pista:</span>
-              <span className="text-slate-300 font-medium leading-snug">
-                {AMBIENT_MUSIC_TRACKS.find((t) => t.id === selectedAmbientTrack)?.desc || "Selecciona una textura de fondo."}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* PRO VOICE SETTINGS PANEL (GRANULAR PER-LINE PITCH, SPEED & EMOTIONAL EMPHASIS BEFORE SYNTHESIS) */}
+      <div ref={proVoicePanelRef}>
+        <ProVoiceSettingsPanel
+          lines={lines}
+          proSettings={proVoiceSettings}
+          onUpdateLineSetting={handleUpdateProLineSetting}
+          onBulkUpdateSettings={handleBulkUpdateProSettings}
+          onUpdateLineText={handleUpdateLineText}
+          onTriggerBatchSynthesis={handleBatchProcessTTS}
+          isBatchProcessingTTS={isBatchProcessingTTS}
+          speakerPitches={speakerPitches}
+          speakerSpeeds={speakerSpeeds}
+        />
       </div>
 
       {/* BATCH GEMINI TTS SYNTHESIS WITH PROGRESS BAR */}
@@ -1231,14 +1665,26 @@ export function PodcastStudioView({
                 </span>
               </div>
 
-              <a
-                href={batchAudioObjectUrl}
-                download={`Episodio_Maestro_${topic.replace(/\s+/g, "_")}.wav`}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Descargar Pista Completa (.wav)</span>
-              </a>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSocialShareModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  title="Compartir vista previa y enlace en LinkedIn y X"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Compartir en Redes</span>
+                </button>
+
+                <a
+                  href={batchAudioObjectUrl}
+                  download={`Episodio_Maestro_${topic.replace(/\s+/g, "_")}.wav`}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar Pista Completa (.wav)</span>
+                </a>
+              </div>
             </div>
 
             <audio
@@ -1573,20 +2019,34 @@ export function PodcastStudioView({
         </div>
       </div>
 
-      {/* SPEAKER VOICE CAST DECK (PLAY SAMPLE 3s PER SPEAKER) */}
+      {/* SPEAKER VOICE CAST DECK (PLAY SAMPLE 3s PER SPEAKER + VOICE CLONE ASSIGNMENT) */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4 transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-            <Mic className="w-4 h-4 text-slate-900 dark:text-slate-100" />
-            Elenco de Voces del Show & Botones Muestra (3s)
-          </h3>
-          <div className="flex items-center gap-2">
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+              <Mic className="w-4 h-4 text-slate-900 dark:text-slate-100" />
+              Elenco de Voces del Show, Muestras (3s) & Perfiles Voice Clone IA
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Asigna tus perfiles personalizados de <strong>Voice Clone</strong> a cada locutor del episodio o prueba muestras en vivo.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
+              onClick={() => setIsVoiceCloneModalOpen(true)}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Voice Clone IA ({clonedVoices.length})</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setIsVoiceGalleryOpen(true)}
-              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
               <Mic className="w-3.5 h-3.5" />
-              Galería de Voces IA
+              <span>Galería de Voces IA</span>
             </button>
             <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
               {uniqueSpeakers.length} Voces Activas
@@ -1597,12 +2057,17 @@ export function PodcastStudioView({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {uniqueSpeakers.map((spk) => {
             const isSampling = samplingSpeaker === spk.speaker;
+            const assignedCloneId = speakerAssignedCloneId[spk.speaker] || "";
+            const assignedClone = clonedVoices.find((c) => c.id === assignedCloneId);
+
             return (
               <div
                 key={spk.speaker}
                 className={`p-3.5 rounded-lg border transition-all flex flex-col justify-between gap-3 ${
                   isSampling
                     ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700/60 shadow-xs"
+                    : assignedClone
+                    ? "bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-300 dark:border-indigo-800/80"
                     : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
                 }`}
               >
@@ -1612,7 +2077,7 @@ export function PodcastStudioView({
                       {spk.speaker.charAt(0)}
                     </div>
                     <div>
-                      <div className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                      <div className="font-bold text-slate-900 dark:text-white text-xs flex flex-wrap items-center gap-1.5">
                         {spk.speaker}
                         <span
                           className={`text-[9px] px-1.5 py-0.2 rounded font-mono uppercase ${
@@ -1623,12 +2088,36 @@ export function PodcastStudioView({
                         >
                           {spk.speakerRole}
                         </span>
+                        {assignedClone && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-mono bg-indigo-600 text-white font-bold">
+                            🧬 {assignedClone.baseAiVoice}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                        {spk.gender} | {spk.accent}
+                        {spk.gender} | {assignedClone ? assignedClone.accent : spk.accent}
                       </p>
                     </div>
                   </div>
+                </div>
+
+                {/* VOICE CLONE PROFILE SELECTOR FOR THIS SPEAKER */}
+                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                  <label className="block text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 uppercase">
+                    Perfil Voice Clone IA:
+                  </label>
+                  <select
+                    value={assignedCloneId}
+                    onChange={(e) => handleAssignCloneToSpeaker(spk.speaker, e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">Voz Estándar del Estudio</option>
+                    {clonedVoices.map((cv) => (
+                      <option key={cv.id} value={cv.id}>
+                        🧬 {cv.speakerName} ({cv.baseAiVoice} • {cv.similarityScore}%)
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* PITCH AND SPEED MODULATION SLIDERS */}
@@ -1787,27 +2276,23 @@ export function PodcastStudioView({
                         type="range"
                         min="0.5"
                         max="2.0"
-                        step="0.1"
-                        value={lineSpeeds[line.id] ?? 1.0}
+                        step="0.05"
+                        value={lineSpeeds[line.id] ?? proVoiceSettings[line.id]?.speed ?? 1.0}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
-                          setLineSpeeds((prev) => ({ ...prev, [line.id]: val }));
+                          handleUpdateProLineSetting(line.id, { speed: val });
                         }}
                         className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
                       />
                       <span className="font-mono font-bold text-amber-600 dark:text-amber-400 min-w-[32px]">
-                        {(lineSpeeds[line.id] ?? 1.0).toFixed(1)}x
+                        {(lineSpeeds[line.id] ?? proVoiceSettings[line.id]?.speed ?? 1.0).toFixed(2)}x
                       </span>
                     </div>
 
-                    {(lineSpeeds[line.id] ?? 1.0) !== 1.0 && (
+                    {(lineSpeeds[line.id] ?? proVoiceSettings[line.id]?.speed ?? 1.0) !== 1.0 && (
                       <button
                         onClick={() => {
-                          setLineSpeeds((prev) => {
-                            const copy = { ...prev };
-                            delete copy[line.id];
-                            return copy;
-                          });
+                          handleUpdateProLineSetting(line.id, { speed: 1.0 });
                         }}
                         className="text-[10px] font-mono text-slate-400 hover:text-slate-200 underline ml-2"
                       >
@@ -2131,6 +2616,67 @@ export function PodcastStudioView({
           </div>
         </div>
       )}
+
+      {/* VOICE CLONE STUDIO MODAL */}
+      {isVoiceCloneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 max-w-2xl w-full rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/30">
+                  <Mic className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Voice Clone Studio — Perfiles de Voz IA</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Clona y calibra perfiles de voz para asignarlos a los locutores del Podcast Studio
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsVoiceCloneModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <VoiceClone
+                compact
+                onSelectVoiceForStudio={(profile) => {
+                  const targetLine = lines.find((l) =>
+                    profile.studioRole === "Host"
+                      ? l.speakerRole === "host"
+                      : l.speakerRole !== "host"
+                  );
+                  const targetSpeaker = targetLine?.speaker || lines[0]?.speaker;
+                  if (targetSpeaker) {
+                    handleAssignCloneToSpeaker(targetSpeaker, profile.id);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Social Media Sharing Modal (LinkedIn & X Preview Card) */}
+      <PodcastSocialShareModal
+        isOpen={isSocialShareModalOpen}
+        onClose={() => setIsSocialShareModalOpen(false)}
+        topic={topic}
+        podcastId={podcastEpisodeId.current}
+        coverArtUrl={coverArt}
+        durationFormatted={estimatedMinutesSeconds || "~12 min"}
+        scriptLines={lines}
+        metadataDescription={metadataResult?.description}
+      />
+
+      {/* Firebase Cloud Messaging Push Notification Manager */}
+      <PushNotificationManager
+        isOpen={isPushNotificationModalOpen}
+        onClose={() => setIsPushNotificationModalOpen(false)}
+      />
     </div>
   );
 }

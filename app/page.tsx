@@ -10,6 +10,7 @@ import { StoryboardView } from "@/components/StoryboardView";
 import type { StoryboardData } from "@/app/api/storyboard/route";
 import { DocsView } from "@/components/DocsView";
 import { RetentionDashboardView } from "@/components/RetentionDashboardView";
+import { DashboardView } from "@/components/DashboardView";
 import { generateAutoTags } from "@/lib/ai-tagger";
 import { LandingHero } from "@/components/LandingHero";
 import { LandingHeader } from "@/components/LandingHeader";
@@ -26,6 +27,8 @@ import { SkeletonDashboardLoader } from "@/components/SkeletonDashboardLoader";
 import { AuthRequiredModal } from "@/components/AuthRequiredModal";
 import { SnapshotRestoreModal, ProjectSnapshot } from "@/components/SnapshotRestoreModal";
 import { ProjectExportModal } from "@/components/ProjectExportModal";
+import { PushNotificationManager } from "@/components/PushNotificationManager";
+import { savePublicPodcast } from "@/lib/podcasts-repository";
 import type { ScriptLine } from "@/app/api/script-writer/route";
 import { useAuth } from "./AuthProvider";
 import { collection, onSnapshot, doc, getDoc, setDoc } from "firebase/firestore";
@@ -51,7 +54,16 @@ function AutosaveNotifier({ syncStatus }: { syncStatus: "saved" | "saving" | "id
 export default function Home() {
   const { user, profile: userProfile, loading, ready, authStatus, retryAuth, forceUnblockLoading, clearAuthCache } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("landing");
-  const { theme, toggleTheme, systemSync, setSystemSync, themeSchedule, setThemeSchedule } = useThemeConfig();
+  const {
+    theme,
+    themePreference,
+    setThemePreference,
+    toggleTheme,
+    systemSync,
+    setSystemSync,
+    themeSchedule,
+    setThemeSchedule,
+  } = useThemeConfig();
 
   // Shared state across views
   const [reportText, setReportText] = useState<string | undefined>(undefined);
@@ -73,6 +85,7 @@ export default function Home() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
   const [showGridOverlay, setShowGridOverlay] = useState<boolean>(false);
   const [isSnapshotRestoreOpen, setIsSnapshotRestoreOpen] = useState<boolean>(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState<boolean>(false);
   const [guestBypassed, setGuestBypassed] = useState<boolean>(true);
   const [authRequiredOpen, setAuthRequiredOpen] = useState<boolean>(false);
   const [authRequiredFeature, setAuthRequiredFeature] = useState<string>("esta función avanzada");
@@ -95,35 +108,62 @@ export default function Home() {
   const [history, setHistory] = useState<PodcastHistoryItem[]>([]);
 
   useEffect(() => {
-    if (user) {
+    if (ready && user?.uid && db) {
       const historyRef = collection(db, "users", user.uid, "history");
-      const unsubscribe = onSnapshot(historyRef, (snapshot) => {
-        const historyData: PodcastHistoryItem[] = [];
-        snapshot.forEach((doc) => {
-          historyData.push(doc.data() as PodcastHistoryItem);
-        });
-        setHistory(historyData);
-      });
+      const unsubscribe = onSnapshot(
+        historyRef,
+        (snapshot) => {
+          const historyData: PodcastHistoryItem[] = [];
+          snapshot.forEach((docSnap) => {
+            historyData.push(docSnap.data() as PodcastHistoryItem);
+          });
+          setHistory(historyData);
+        },
+        () => {
+          // Gracefully ignore permission or transient snapshot errors during auth transitions
+        }
+      );
       return () => unsubscribe();
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHistory([]);
     }
-  }, [user]);
+  }, [ready, user]);
 
   const saveHistoryItem = async (item: PodcastHistoryItem) => {
     const itemWithTags = {
       ...item,
+      title: (item as any).title || item.topic?.slice(0, 180) || "Episodio SourceFinder",
+      status: (item as any).status || "Ready",
       tags: item.tags && item.tags.length > 0
         ? item.tags
         : generateAutoTags(item.topic, item.contentType, item.reportText || item.rawScript || ""),
     };
-    if (user) {
-      const itemRef = doc(db, "users", user.uid, "history", item.id);
-      await setDoc(itemRef, itemWithTags);
+    if (user?.uid && db) {
+      try {
+        const itemRef = doc(db, "users", user.uid, "history", item.id);
+        await setDoc(itemRef, itemWithTags);
+      } catch {
+        setHistory((prev) => [itemWithTags, ...prev.filter((h) => h.id !== item.id)]);
+      }
     } else {
       setHistory((prev) => [itemWithTags, ...prev.filter((h) => h.id !== item.id)]);
     }
+
+    // Sync to public repository for OpenGraph and sitemap indexing
+    savePublicPodcast({
+      id: item.id,
+      title: itemWithTags.title,
+      topic: item.topic,
+      description: item.reportSnippet || item.topic,
+      contentType: item.contentType || "Análisis",
+      format: item.format || "Análisis",
+      status: (item as any).status || "Ready",
+      duration: (item as any).duration || "~15 min",
+      date: item.date || new Date().toISOString().slice(0, 10),
+      scriptLinesCount: item.scriptLinesCount,
+      tags: itemWithTags.tags,
+    });
   };
 
   const clearHistory = async () => {
@@ -135,7 +175,7 @@ export default function Home() {
 
   // Load draft from Firestore on user login
   useEffect(() => {
-    if (!user) return;
+    if (!ready || !user?.uid || !db) return;
     const loadDraft = async () => {
       try {
         const draftRef = doc(db, "users", user.uid, "drafts", "currentSession");
@@ -148,13 +188,13 @@ export default function Home() {
             setScriptLines(data.scriptLines);
           }
         }
-      } catch (e) {
-        console.error("Error loading draft:", e);
+      } catch {
+        // Ignore transient draft load errors
       }
     };
     loadDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [ready, user]);
 
   // Sync status for autosave
   const [syncStatus, setSyncStatus] = useState<"saved" | "saving" | "idle">("saved");
@@ -198,19 +238,31 @@ export default function Home() {
     window.addEventListener("offline", handleOffline);
 
     let unsub: (() => void) | null = null;
-    try {
-      const statusRef = doc(db, "_system_", "connection_check");
-      unsub = onSnapshot(statusRef, { includeMetadataChanges: true }, (snapshot) => {
-        if (snapshot.metadata.fromCache && typeof navigator !== "undefined" && !navigator.onLine) {
-          setIsFirestoreConnected(false);
-        } else {
-          setIsFirestoreConnected(true);
-        }
-      }, (err) => {
-        console.warn("Firestore connectivity check warning:", err);
-      });
-    } catch (err) {
-      console.warn("Firestore listener init warning:", err);
+    if (ready && user?.uid && db) {
+      try {
+        const statusRef = doc(db, "users", user.uid);
+        unsub = onSnapshot(
+          statusRef,
+          { includeMetadataChanges: true },
+          (snapshot) => {
+            if (snapshot.metadata.fromCache && typeof navigator !== "undefined" && !navigator.onLine) {
+              setIsFirestoreConnected(false);
+            } else {
+              setIsFirestoreConnected(true);
+            }
+          },
+          (err: any) => {
+            if (err?.code === "unavailable") {
+              setIsFirestoreConnected(false);
+            } else {
+              // Server responded (e.g. auth transition), so network connectivity is online
+              setIsFirestoreConnected(typeof navigator !== "undefined" ? navigator.onLine : true);
+            }
+          }
+        );
+      } catch {
+        // Initial state already reflects navigator.onLine
+      }
     }
 
     return () => {
@@ -218,7 +270,7 @@ export default function Home() {
       window.removeEventListener("offline", handleOffline);
       if (unsub) unsub();
     };
-  }, [addToast]);
+  }, [addToast, ready, user]);
 
   const handleExportProject = () => {
     setIsExportModalOpen(true);
@@ -439,6 +491,7 @@ export default function Home() {
             syncStatus={syncStatus}
             isFirestoreConnected={isFirestoreConnected}
             onOpenSnapshotRestore={() => setIsSnapshotRestoreOpen(true)}
+            onOpenNotifications={() => setIsNotificationCenterOpen(true)}
           />
         )}
 
@@ -448,6 +501,7 @@ export default function Home() {
             <LandingHero
               onStartNow={() => setActiveTab("orchestrator")}
               onOpenLogin={() => setIsProfileOpen(true)}
+              onSelectPreset={handleSelectPreset}
             />
           ) : (
             <>
@@ -539,7 +593,8 @@ export default function Home() {
 
                 {activeTab === "analytics" && (
                   <ErrorBoundary moduleName="Analítica de Retención">
-                    <RetentionDashboardView
+                    <DashboardView
+                      history={history}
                       currentScriptLength={rawScript ? rawScript.split(/\s+/).length : (scriptLines.length * 15)}
                       currentFormat={selectedPreset?.format || "Análisis"}
                       onApplyLengthRecommendation={(recommendedLength) => {
@@ -577,6 +632,8 @@ export default function Home() {
           onClearSession={handleClearSession}
           showGridOverlay={showGridOverlay}
           onToggleGridOverlay={setShowGridOverlay}
+          themePreference={themePreference}
+          onChangeThemePreference={setThemePreference}
           systemSync={systemSync}
           onToggleSystemSync={(val) => {
              setSystemSync(val);
@@ -658,8 +715,13 @@ export default function Home() {
           onStayActive={() => {}}
         />
 
+        <PushNotificationManager
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
+        />
+
         <footer className="py-6 border-t border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-          <p>SourceFinder Pod © 2026 • Conecta Chava • VSNRY LABS • Todos los derechos reservados.</p>
+          <p>SOFinder Podcast © 2026 • VSNRY LABS • Conecta Chava • Todos los derechos reservados.</p>
           <p className="text-[10px] font-mono opacity-60">v0.1.0</p>
         </footer>
       </div>

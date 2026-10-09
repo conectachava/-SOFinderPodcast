@@ -61,16 +61,21 @@ La aplicación se organiza en una arquitectura modular de pestañas e instrument
 4. **Script Studio (Estudio de Guion):** Editor de guiones en tiempo real.
    - **Smart Refine:** Botón de pulido con IA que corrige gramática y fluidez conversacional.
    - **Focus Mode:** Modo de lectura inmersiva sin distracciones.
-5. **Podcast Studio (Estudio de Voz):** Reproductor de audio multilocutor con etiquetas de sentimiento (Entusiasta, Neutro, Preocupado), barras de estado de voz y generación con Gemini TTS.
+5. **Podcast Studio (Estudio de Voz y Carátulas Imagen):**
+   - **Reproductor y Síntesis Multivoz:** Reproductor de audio multilocutor con etiquetas de sentimiento (Entusiasta, Neutro, Preocupado), barras de estado de voz, pausas inteligentes y generación por lote con Gemini TTS.
+   - **Estudio de Carátulas con Imagen (`ImagenCoverStudio`):** Herramienta integrada en el flujo del Podcast Studio que utiliza modelos Imagen (`imagen-3.0-generate-002` / `imagen-4.0-generate-001`) y `gemini-3.1-flash-lite-image` (con respaldo vectorial determinista) para diseñar carátulas personalizadas por estilo artístico, paleta cromática, relación de aspecto (`1:1`, `16:9`, `9:16`) y extracción de concepto visual desde el guion.
+   - **Asignación de Voces Clonadas (`VoiceClone`):** Selector por locutor para vincular perfiles de voz personalizados creados en el panel de usuario.
 6. **Storyboard (Visuales Flow):** Vista gráfica con desglose de escenas de video de 5-15 segundos, prompts hiperrealistas para locutores y sugerencias de planos B-Roll.
-7. **Documentación (Docs):** Visor integrado de la arquitectura y guías del sistema.
+7. **Métricas & Retención (`DashboardView`):** Panel analítico basado en Recharts para visualizar tasa de retención estimada, tiempo promedio de escucha, crecimiento por audiencia y simulador de longitud de guion.
+8. **Documentación (Docs):** Visor integrado de la arquitectura y guías del sistema.
 
 ---
 
 ## 5. Módulos Adicionales y Herramientas
 
-- **Autoguardado en Firestore:** Hay lógica de sincronización cada 3 segundos, pero el flujo de acceso Hub actual no establece una identidad Firebase verificada; por ello el autosave en nube no está disponible para esas sesiones.
-- **Modo Temático Flexible:** Soporta tema claro, oscuro, sincronización con preferencia del sistema y programación por horario.
+- **Voice Clone IA (`components/VoiceClone.tsx`):** Componente disponible en el panel del usuario (pestaña *Voice Clone*) y en el Podcast Studio para subir o grabar muestras de audio (5-30s), analizar frecuencia fundamental y timbre mediante Web Audio API, calibrar parámetros (`pitchShift`, `speed`, `warmth`, motor base Gemini TTS) y asignar perfiles clonados directamente al elenco del Podcast Studio.
+- **Autoguardado en Firestore:** Sincronización con debounce de 3 segundos cuando existe una sesión autenticada de Firebase (`request.auth != null`). La página de inicio (`Landing`) y el estudio se cargan sin redirección automática a `gs.conectachava.com`.
+- **Modo Temático Flexible (`useThemeConfig`):** Selector en el perfil de usuario que permite elegir entre **Siempre Claro** (`light`), **Siempre Oscuro** (`dark`) o **Sincronizar con Sistema** (`system`), con transición fluida mediante las variables CSS definidas en `app/globals.css`.
 - **Exportación de Proyecto:** Descarga de informes, guiones y storyboards en formato JSON, Markdown y TXT.
 - **Historial Reciente:** Cajón de proyectos anteriores guardados en Firestore para recargar sesiones previas.
 - **Atajos de Teclado:**

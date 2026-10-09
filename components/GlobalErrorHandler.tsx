@@ -14,28 +14,28 @@ export function GlobalErrorHandler() {
 
     const logToFirestore = async (errorType: string, message: string, detailObj: any) => {
       try {
-        const { db, safeSetDoc } = await import("@/lib/firebase");
-        const { doc } = await import("firebase/firestore");
-        if (!db) return;
+        const { auth, db } = await import("@/lib/firebase");
+        const { doc, setDoc } = await import("firebase/firestore");
+        if (!db || !auth?.currentUser?.uid) return;
 
         const docId = `ERR-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const errorDocRef = doc(db, "system_errors", docId);
         const payload = {
           errorId: docId,
           type: errorType,
-          message: String(message || "Error sin mensaje"),
-          stack: detailObj?.stack || (detailObj instanceof Error ? detailObj.stack : null),
-          url: typeof window !== "undefined" ? window.location.href : "",
-          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+          message: String(message || "Error sin mensaje").slice(0, 1000),
+          stack: String(detailObj?.stack || (detailObj instanceof Error ? detailObj.stack : "") || "").slice(0, 2000),
+          url: typeof window !== "undefined" ? window.location.href.slice(0, 500) : "",
+          userAgent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 500) : "",
           timestamp: new Date().toISOString(),
           status: "unresolved",
           severity: "critical",
-          details: typeof detailObj === "object" ? JSON.stringify(detailObj) : String(detailObj || ""),
+          details: (typeof detailObj === "object" ? JSON.stringify(detailObj) : String(detailObj || "")).slice(0, 2000),
         };
-        await safeSetDoc(errorDocRef, payload, { merge: true });
+        await setDoc(errorDocRef, payload, { merge: true });
         logger.info(`[GLOBAL_ERR_FIRESTORE] Error crítico registrado en Firestore 'system_errors': ${docId}`, { docId }, "GlobalErrorHandler");
-      } catch (e: any) {
-        console.warn("[GlobalErrorHandler] No se pudo guardar el error en Firestore system_errors:", e?.message);
+      } catch {
+        // Do not emit secondary console errors if error telemetry write is rejected
       }
     };
 
