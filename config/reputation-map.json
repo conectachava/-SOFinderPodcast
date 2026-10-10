@@ -1,21 +1,112 @@
 {
+  "academic_government": {
+    "domains": [
+      "nature.com",
+      "science.org",
+      "arxiv.org",
+      "nih.gov",
+      "mit.edu",
+      "stanford.edu",
+      "ieee.org",
+      "nasa.gov",
+      "who.int"
+    ],
+    "score": 0.98
+  },
   "top_tier_news": {
-    "domains": ["bbc.com", "reuters.com", "apnews.com", "bloomberg.com"],
+    "domains": [
+      "bbc.com",
+      "reuters.com",
+      "apnews.com",
+      "bloomberg.com",
+      "nytimes.com",
+      "wsj.com",
+      "theguardian.com",
+      "elpais.com",
+      "elmundo.es",
+      "lemonde.fr",
+      "dw.com"
+    ],
     "score": 0.95
   },
   "tech_press": {
-    "domains": ["wired.com", "theverge.com", "techcrunch.com"],
+    "domains": [
+      "wired.com",
+      "theverge.com",
+      "techcrunch.com",
+      "arstechnica.com",
+      "technologyreview.com",
+      "zdnet.com",
+      "venturebeat.com",
+      "engadget.com"
+    ],
     "score": 0.92
   },
   "entertainment": {
-    "domains": ["variety.com", "hollywoodreporter.com", "tmz.com"],
+    "domains": [
+      "variety.com",
+      "hollywoodreporter.com",
+      "tmz.com",
+      "deadline.com",
+      "rollingstone.com"
+    ],
     "score": 0.82
   },
   "community": {
-    "domains": ["reddit.com", "medium.com", "substack.com"],
+    "domains": [
+      "reddit.com",
+      "medium.com",
+      "substack.com",
+      "quora.com"
+    ],
     "score": 0.55
   },
   "default_unverified": {
-    "score": 0.20
+    "score": 0.3
+  },
+  "bias_indicators": {
+    "clickbait_keywords": [
+      "shocking",
+      "mind-blowing",
+      "you won't believe",
+      "secret trick",
+      "conspiracy",
+      "scandal",
+      "increible",
+      "increíble",
+      "no vas a creer",
+      "escandalo",
+      "escándalo",
+      "secreto revelado",
+      "conspiracion",
+      "conspiración",
+      "bomba informativa",
+      "insane"
+    ],
+    "promotional_keywords": [
+      "sponsored",
+      "patrocinado",
+      "advertorial",
+      "promoted content",
+      "affiliate link",
+      "publirreportaje",
+      "enlace de afiliado",
+      "sponsored by"
+    ],
+    "unverified_rumor_keywords": [
+      "rumor has it",
+      "unconfirmed sources claim",
+      "rumores apuntan",
+      "filtración no confirmada",
+      "fuentes anónimas aseguran",
+      "unverified leak",
+      "speculation suggests"
+    ]
+  },
+  "weights": {
+    "domain_authority": 0.55,
+    "recency": 0.25,
+    "baseline": 0.2,
+    "max_bias_penalty": 0.35
   }
 }

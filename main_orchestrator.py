@@ -19,11 +19,12 @@ MIXER_SCRIPT = "mix_audio.py"
 
 
 class Orchestrator:
-    def __init__(self, topic: str, content_type: str, show_format: str, workspace: Path):
+    def __init__(self, topic: str, content_type: str, show_format: str, workspace: Path, language: str = "es"):
         self.topic = topic
         self.content_type = content_type
         self.show_format = show_format
         self.workspace = workspace
+        self.language = language
 
         # Rutas clave para los artefactos intermedios
         self.report_path = self.workspace / "intelligence_report.md"
@@ -49,7 +50,13 @@ class Orchestrator:
         
         # 1. Módulo de Búsqueda (SourceFinder)
         self._run_step(
-            [SOURCE_FINDER_SCRIPT, "--topic", self.topic, "--type", self.content_type, "--output_path", str(self.report_path)],
+            [
+                SOURCE_FINDER_SCRIPT,
+                "--topic", self.topic,
+                "--type", self.content_type,
+                "--lang", self.language,
+                "--output_path", str(self.report_path),
+            ],
             "Intelligence Gathering (SourceFinder)"
         )
 
@@ -76,6 +83,7 @@ def main():
     parser.add_argument("--topic", type=str, required=True, help="Topic for research")
     parser.add_argument("--type", type=str, default="General", help="Content type")
     parser.add_argument("--format", type=str, default="Debate", help="Podcast format style")
+    parser.add_argument("--lang", "--language", dest="language", type=str, default="es", help="Language for research and generation ('es' or 'en')")
     parser.add_argument("--workspace", type=Path, default=Path("workspace"), help="Workspace folder")
     args = parser.parse_args()
 
@@ -83,7 +91,8 @@ def main():
         topic=args.topic,
         content_type=args.type,
         show_format=args.format,
-        workspace=args.workspace
+        workspace=args.workspace,
+        language=args.language,
     )
     orchestrator.run_pipeline()
 

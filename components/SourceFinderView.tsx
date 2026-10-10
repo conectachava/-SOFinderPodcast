@@ -40,6 +40,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
   const [isCitingActive, setIsCitingActive] = useState<boolean>(false);
   const [activeCitationIndex, setActiveCitationIndex] = useState<number | null>(null);
   const [groundingMode, setGroundingMode] = useState<"speed" | "depth">("speed");
+  const [language, setLanguage] = useState<"es" | "en">("es");
 
   const presetExclusionSuggestions = [
     "rumores",
@@ -148,6 +149,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
           customMinReputation: minReputation,
           excludedKeywords,
           groundingMode,
+          language,
         }),
       });
 
@@ -171,8 +173,10 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
       } else {
         const rejectedCount = (data.rawSources?.length || 0) - (data.qualifiedSources?.length || 0);
         addToast(
-          "Informe Generado con Filtros",
-          `${data.qualifiedSources?.length || 0} fuentes calificadas (${rejectedCount} descartadas por filtros).`,
+          language === "en" ? "Report Generated with Nuanced Filters" : "Informe Generado con Filtros",
+          language === "en"
+            ? `${data.qualifiedSources?.length || 0} qualified sources (${rejectedCount} filtered out, dynamic threshold ${(data.dynamicMinReputation * 100).toFixed(0)}%).`
+            : `${data.qualifiedSources?.length || 0} fuentes calificadas (${rejectedCount} descartadas, umbral dinámico ${(data.dynamicMinReputation * 100).toFixed(0)}%).`,
           "success"
         );
       }
@@ -186,7 +190,7 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
     } finally {
       setLoading(false);
     }
-  }, [topic, contentType, minReputation, excludedKeywords, addToast, groundingMode]);
+  }, [topic, contentType, minReputation, excludedKeywords, addToast, groundingMode, language]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -522,6 +526,39 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
             </select>
           </div>
 
+          <div>
+            <label className="block font-semibold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Idioma del Informe (Multilingual)</span>
+              <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{language.toUpperCase()}</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setLanguage("es")}
+                className={`py-1.5 text-xs font-bold rounded transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  language === "es"
+                    ? "bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-2xs ring-1 ring-indigo-400/40"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                }`}
+              >
+                <span>🇪🇸</span>
+                <span>Español</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage("en")}
+                className={`py-1.5 text-xs font-bold rounded transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  language === "en"
+                    ? "bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-2xs ring-1 ring-indigo-400/40"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                }`}
+              >
+                <span>🇺🇸</span>
+                <span>English</span>
+              </button>
+            </div>
+          </div>
+
           {mode === "sequential" ? (
             <div className="p-3.5 bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 rounded-xl space-y-3">
               <div className="flex justify-between items-center">
@@ -620,6 +657,22 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
                       </button>
                     ))}
                   </div>
+
+                  {filtersAppliedInfo?.dynamicMinReputation !== undefined && (
+                    <div className="mt-2 p-2.5 bg-indigo-50/90 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[10px] space-y-1">
+                      <div className="flex justify-between items-center font-bold text-indigo-900 dark:text-indigo-200">
+                        <span>Umbral Dinámico Adaptativo:</span>
+                        <span className="font-mono text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
+                          {(filtersAppliedInfo.dynamicMinReputation * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      {Array.isArray(filtersAppliedInfo.adjustmentReasons) && (
+                        <p className="text-[10px] text-indigo-700 dark:text-indigo-300 leading-snug">
+                          {filtersAppliedInfo.adjustmentReasons.join(" • ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Excluded Keywords Blacklist */}
@@ -1387,20 +1440,42 @@ export function SourceFinderView({ onUseReportForScript }: { onUseReportForScrip
 
                               {/* Confidence Score Hover Overlay */}
                               {isHovered && (
-                                <div className="absolute right-0 bottom-full mb-2 w-64 bg-slate-900 text-white p-3 rounded-xl shadow-xl z-30 border border-slate-700 text-xs space-y-2 animate-in fade-in">
+                                <div className="absolute right-0 bottom-full mb-2 w-72 bg-slate-950 text-white p-3 rounded-xl shadow-2xl z-30 border border-slate-700 text-xs space-y-2 animate-in fade-in">
                                   <div className="flex items-center justify-between font-bold border-b border-slate-800 pb-1.5">
-                                    <span className="text-amber-300">Confianza de Dominio</span>
-                                    <span className="font-mono text-emerald-400">{confidencePct}% Trusted</span>
+                                    <span className="text-amber-300 font-semibold text-[11px]">Auditoría Multidimensional</span>
+                                    <span className="font-mono text-emerald-400 font-bold">{confidencePct}% Reputación</span>
                                   </div>
-                                  <p className="text-[10px] text-slate-300">
-                                    {s.qualified
-                                      ? `Dominio con alta reputación y verificación SSL activa. Índice de autoridad: ${(s.source_reputation * 10).toFixed(1)}/10.`
-                                      : `Dominio descartado por bajo puntaje de autoridad (${(s.source_reputation * 10).toFixed(1)}/10) o sesgo editorial detectado.`}
-                                  </p>
-                                  <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono">
-                                    <span>Seguridad: HTTPS OK</span>
-                                    <span>Verificación IA: Aprobada</span>
+                                  <div className="space-y-1 text-[10px] text-slate-300 font-mono">
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-400">Autoridad de Dominio:</span>
+                                      <span className="font-bold text-indigo-300">
+                                        {s.domain_authority !== undefined ? `${Math.round(s.domain_authority * 100)}%` : "N/D"} ({s.domain_tier || "tier"})
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-400">Recencia / Fecha:</span>
+                                      <span className="font-bold text-sky-300">
+                                        {s.recency_score !== undefined ? `${Math.round(s.recency_score * 100)}%` : "100%"} ({s.publication_date || "Hoy"})
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-400">Penalización Sesgo:</span>
+                                      <span className={`font-bold ${s.bias_penalty > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                                        {s.bias_penalty ? `-${Math.round(s.bias_penalty * 100)}%` : "0% (Neutro)"}
+                                      </span>
+                                    </div>
                                   </div>
+                                  {Array.isArray(s.detected_bias_indicators) && s.detected_bias_indicators.length > 0 && (
+                                    <div className="pt-1 border-t border-slate-800 text-[9px] text-amber-300">
+                                      <span className="font-bold">Sesgos / Clickbait: </span>
+                                      <span>{s.detected_bias_indicators.join(", ")}</span>
+                                    </div>
+                                  )}
+                                  {s.rejection_reason && !s.qualified && (
+                                    <p className="text-[9px] text-rose-300 border-t border-slate-800 pt-1 leading-tight">
+                                      Motivo: {s.rejection_reason}
+                                    </p>
+                                  )}
                                 </div>
                               )}
                             </td>
