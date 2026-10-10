@@ -242,6 +242,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   localStorage.clear();
                   sessionStorage.clear();
                 } catch (e) {}
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 window.location.href = "/";
               }}
               className="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
